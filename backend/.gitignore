@@ -1,0 +1,15 @@
+# --- BirdNET Analyzer Ignores ---
+
+# Ignore the top-level docs
+backend/BirdNET-Analyzer/docs/
+
+# Ignore specific subfolders inside the analyzer package
+backend/BirdNET-Analyzer/birdnet_analyzer/embeddings/
+backend/BirdNET-Analyzer/birdnet_analyzer/evaluation/
+backend/BirdNET-Analyzer/birdnet_analyzer/gui/
+backend/BirdNET-Analyzer/birdnet_analyzer/labels/
+backend/BirdNET-Analyzer/birdnet_analyzer/lang/
+backend/BirdNET-Analyzer/birdnet_analyzer/network/
+backend/BirdNET-Analyzer/birdnet_analyzer/search/
+backend/BirdNET-Analyzer/birdnet_analyzer/segments/
+backend/BirdNET-Analyzer/birdnet_analyzer/train/

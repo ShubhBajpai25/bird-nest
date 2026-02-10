@@ -1,0 +1,45 @@
+Start (s),End (s),Scientific name,Common name,Confidence,File
+0.0,3.0,Passer domesticus,House Sparrow,0.8794,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+0.0,3.0,Passer montanus,Eurasian Tree Sparrow,0.5185,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+3.0,6.0,Passer domesticus,House Sparrow,0.7848,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+3.0,6.0,Passer montanus,Eurasian Tree Sparrow,0.4938,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+6.0,9.0,Passer domesticus,House Sparrow,0.9229,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+9.0,12.0,Passer domesticus,House Sparrow,0.9159,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+12.0,15.0,Passer domesticus,House Sparrow,0.8194,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+15.0,18.0,Passer domesticus,House Sparrow,0.4846,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+18.0,21.0,Passer domesticus,House Sparrow,0.9024,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+21.0,24.0,Passer domesticus,House Sparrow,0.8875,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+24.0,27.0,Catherpes mexicanus,Canyon Wren,0.2916,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+27.0,30.0,Passer domesticus,House Sparrow,0.8982,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+30.0,33.0,Passer montanus,Eurasian Tree Sparrow,0.8385,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+30.0,33.0,Passer domesticus,House Sparrow,0.7318,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+33.0,36.0,Passer domesticus,House Sparrow,0.7272,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+33.0,36.0,Passer montanus,Eurasian Tree Sparrow,0.6067,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+36.0,39.0,Passer domesticus,House Sparrow,0.4368,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+36.0,39.0,Passer montanus,Eurasian Tree Sparrow,0.3821,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+39.0,42.0,Passer domesticus,House Sparrow,0.5075,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+42.0,45.0,Passer domesticus,House Sparrow,0.9464,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+45.0,48.0,Passer domesticus,House Sparrow,0.7555,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+48.0,51.0,Passer domesticus,House Sparrow,0.7002,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+51.0,54.0,Passer domesticus,House Sparrow,0.7643,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+54.0,57.0,Passer domesticus,House Sparrow,0.4703,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+54.0,57.0,Passer montanus,Eurasian Tree Sparrow,0.3542,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+57.0,60.0,Passer domesticus,House Sparrow,0.6329,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+60.0,63.0,Passer domesticus,House Sparrow,0.9102,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+63.0,66.0,Passer domesticus,House Sparrow,0.9176,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+66.0,69.0,Passer domesticus,House Sparrow,0.6337,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+69.0,72.0,Passer domesticus,House Sparrow,0.8510,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+72.0,75.0,Passer domesticus,House Sparrow,0.9288,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+75.0,78.0,Passer domesticus,House Sparrow,0.9122,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+78.0,81.0,Passer domesticus,House Sparrow,0.8015,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+81.0,84.0,Passer domesticus,House Sparrow,0.8807,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+84.0,87.0,Passer domesticus,House Sparrow,0.9234,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+87.0,90.0,Passer domesticus,House Sparrow,0.7229,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+90.0,93.0,Passer domesticus,House Sparrow,0.8363,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+93.0,96.0,Passer domesticus,House Sparrow,0.9029,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+96.0,99.0,Passer domesticus,House Sparrow,0.9072,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+99.0,102.0,Passer domesticus,House Sparrow,0.9260,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+102.0,105.0,Passer domesticus,House Sparrow,0.9265,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+105.0,108.0,Passer domesticus,House Sparrow,0.5694,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+111.0,114.0,Passer domesticus,House Sparrow,0.8285,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav
+114.0,117.0,Passer domesticus,House Sparrow,0.9281,C:\Users\Fahad\Documents\Programming\Uni\curr\FIT5225\BirdyBuddies-\assignment_files\BirdNET-Analyzer\test\test.wav

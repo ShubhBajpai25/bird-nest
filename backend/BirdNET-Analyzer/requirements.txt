@@ -1,0 +1,7 @@
+librosa==0.10.1
+numba==0.58.1
+resampy==0.4.3
+llvmlite==0.41.1
+soundfile
+tensorflow-cpu==2.15.1
+tqdm
