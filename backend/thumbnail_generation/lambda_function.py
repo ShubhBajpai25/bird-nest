@@ -4,43 +4,46 @@ import numpy as np
 import os
 import logging
 import json
+from urllib.parse import unquote_plus
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
-    # Initialize logging inside the handler
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    
-    # Initialize S3 client inside handler
-    s3 = boto3.client('s3')
-    
     # Config
     THUMBNAIL_SIZE = (128, 128)
     THUMBNAIL_PREFIX = 'thumbnails/'
-    DEST_BUCKET = 'original-files-buck'
     
     try:
-        logger.info("Lambda triggered")
-        logger.info("Received event: %s", json.dumps(event))
-
-        # Get uploaded file info from S3 trigger
+        # Get uploaded file info
         record = event['Records'][0]
         bucket = record['s3']['bucket']['name']
-        key = record['s3']['object']['key']
+        # Handle spaces/special characters in filenames
+        key = unquote_plus(record['s3']['object']['key'])
 
-        # Only handle image files
-        if not key.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif')):
-            logger.info(f"Skipped non-image file: {key}")
+        logger.info(f"Processing: {key} from {bucket}")
+
+        # --- CRITICAL FIX: Prevent Infinite Loops ---
+        # If the file is already a thumbnail, STOP immediately.
+        if key.startswith(THUMBNAIL_PREFIX) or "-thumb.jpg" in key:
+            logger.info("Skipping: File is already a thumbnail.")
             return {
                 'statusCode': 200,
-                'body': json.dumps(f'Skipped non-image file: {key}')
+                'body': json.dumps('Skipped thumbnail file')
             }
 
-        # Download the original image
+        # Only handle image files
+        if not key.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp')):
+            logger.info(f"Skipped non-image file: {key}")
+            return {'statusCode': 200, 'body': json.dumps('Skipped non-image')}
+
+        # Download original
         local_path = f"/tmp/{os.path.basename(key)}"
-        logger.info(f"Downloading s3://{bucket}/{key} to {local_path}")
         s3.download_file(bucket, key, local_path)
 
-        # Load image using OpenCV
+        # Process with OpenCV
         image = cv2.imread(local_path)
         if image is None:
             raise Exception("OpenCV failed to read image")
@@ -48,50 +51,40 @@ def lambda_handler(event, context):
         # Resize
         thumbnail = resize_with_aspect_ratio(image, THUMBNAIL_SIZE)
 
-        # Encode thumbnail as JPEG
+        # Encode
         success, buffer = cv2.imencode('.jpg', thumbnail)
         if not success:
-            raise Exception("OpenCV failed to encode thumbnail")
-
+            raise Exception("Compression failed")
         thumbnail_bytes = buffer.tobytes()
 
-        # Prepare new key in thumbnail folder
+        # Construct new Key
         original_name = os.path.basename(key)
-        thumb_key = f"{THUMBNAIL_PREFIX}{original_name.rsplit('.', 1)[0]}-thumb.jpg"
+        # Use the same bucket as the source (Dynamic, not hardcoded)
+        dest_bucket = bucket 
+        thumb_key = f"{THUMBNAIL_PREFIX}{os.path.splitext(original_name)[0]}-thumb.jpg"
 
-        # Upload thumbnail to same bucket in thumbnail folder
+        # Upload
         s3.put_object(
-            Bucket=DEST_BUCKET,
+            Bucket=dest_bucket,
             Key=thumb_key,
             Body=thumbnail_bytes,
             ContentType='image/jpeg',
-            Metadata={
-                'original-image': key
-            }
+            Metadata={'original-image': key}
         )
 
-        logger.info(f"Thumbnail uploaded to: s3://{DEST_BUCKET}/{thumb_key}")
+        logger.info(f"Success: s3://{dest_bucket}/{thumb_key}")
         
-        # Clean up temporary file
+        # Cleanup
         if os.path.exists(local_path):
             os.remove(local_path)
         
-        return {
-            'statusCode': 200,
-            'body': json.dumps(f'Thumbnail created successfully: {thumb_key}')
-        }
+        return {'statusCode': 200, 'body': json.dumps('Thumbnail success')}
 
     except Exception as e:
-        logger.error(f"Error in thumbnail generation: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps(f'Error: {str(e)}')
-        }
+        logger.error(f"Error: {str(e)}")
+        return {'statusCode': 500, 'body': json.dumps(str(e))}
 
 def resize_with_aspect_ratio(image, target_size):
-    """
-    Resize image while preserving aspect ratio
-    """
     h, w = image.shape[:2]
     max_w, max_h = target_size
     scale = min(max_w / w, max_h / h)
