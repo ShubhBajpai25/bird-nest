@@ -1,8 +1,8 @@
-roboflow 
-ultralytics 
+ultralytics
 supervision
-opencv-python
-matplotlib
+opencv-python-headless
+boto3
 numpy
 requests
 Pillow
+matplotlib
