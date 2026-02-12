@@ -5,6 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 export interface UploadResult {
   success: boolean;
   key?: string;
+  s3_url?: string;
   error?: string;
 }
 
@@ -63,7 +64,7 @@ export const BirdNestAPI = {
       );
 
       if (!res.ok) throw new Error("Failed to get upload URL");
-      const { uploadUrl, key } = await res.json();
+      const { uploadUrl, key, s3_url } = await res.json();
 
       const upload = await fetch(uploadUrl, {
         method: "PUT",
@@ -72,7 +73,7 @@ export const BirdNestAPI = {
       });
       if (!upload.ok) throw new Error("Failed to upload to S3");
 
-      return { success: true, key };
+      return { success: true, key, s3_url };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       console.error("Upload error:", err);

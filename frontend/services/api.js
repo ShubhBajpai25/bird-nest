@@ -10,7 +10,6 @@ export const BirdNestAPI = {
    */
   uploadFile: async (file) => {
     try {
-      // Step A: Ask Lambda for a secure Upload URL
       const filename = encodeURIComponent(file.name);
       const fileType = encodeURIComponent(file.type);
       
@@ -19,18 +18,18 @@ export const BirdNestAPI = {
       });
       
       if (!response.ok) throw new Error('Failed to get upload URL');
-      const { uploadUrl, key } = await response.json();
+      
+      // Get the s3_url from the response
+      const { uploadUrl, key, s3_url } = await response.json(); 
 
-      // Step B: Upload the actual file directly to S3
-      const uploadResponse = await fetch(uploadUrl, {
+      await fetch(uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file,
       });
 
-      if (!uploadResponse.ok) throw new Error('Failed to upload to S3');
-
-      return { success: true, key };
+      // Return the s3_url so the component uses it for polling
+      return { success: true, key, s3_url }; 
     } catch (error) {
       console.error("Upload Error:", error);
       return { success: false, error: error.message };
@@ -105,7 +104,7 @@ export const BirdNestAPI = {
     });
     return response.json();
   },
-  
+
   pollForResults: async (s3Url, attempts = 10) => {
     for (let i = 0; i < attempts; i++) {
       // Wait 1 second between checks

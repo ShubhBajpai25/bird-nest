@@ -19,7 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import PageTransition from "@/app/components/PageTransition";
-import { BirdNestAPI, S3_BUCKET_URL, type FileMetadata } from "@/app/lib/api";
+import { BirdNestAPI, type FileMetadata } from "@/app/lib/api";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -194,7 +194,7 @@ export default function UploadPage() {
     for (const pf of pending) {
       const result = await BirdNestAPI.uploadFile(pf.file);
 
-      if (result.success && result.key) {
+      if (result.success && result.s3_url) {
         setFiles((prev) =>
           prev.map((f) =>
             f.id === pf.id
@@ -203,7 +203,7 @@ export default function UploadPage() {
           )
         );
 
-        const s3Url = `${S3_BUCKET_URL}/${result.key}`;
+        const s3Url = result.s3_url;
         const detId = pf.id + "-det";
         const newDetection: DetectionResult = {
           id: detId,
