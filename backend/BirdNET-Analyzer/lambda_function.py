@@ -1,55 +1,99 @@
+import os
 import json
 import boto3
-import os
 import shutil
-import glob
+import subprocess
+import numpy as np
+import scipy.io.wavfile
 from urllib.parse import unquote_plus
 import logging
 
-# Import official analyzer
-from birdnet_analyzer.analyze import analyze
-from birdnet_analyzer import config as cfg
+# Direct TFLite import
+import tensorflow.lite as tflite
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource('dynamodb')
-TABLE_NAME = os.environ.get('TABLE_NAME', 'MediaFiles')
-media_table = dynamodb.Table(TABLE_NAME)
+media_table = dynamodb.Table(os.environ.get('TABLE_NAME', 'MediaFiles'))
 s3_client = boto3.client('s3')
 
-class Args:
-    def __init__(self, i, o, m, l):
-        self.i = i
-        self.o = o
-        self.model = m # Path to .tflite file
-        self.labels = l # Path to labels .txt
-        self.min_conf = 0.4
-        self.sensitivity = 1.0
-        self.overlap = 0.0
-        self.rtype = 'csv'
-        self.threads = 1
-        self.batch_size = 1
-        self.locale = 'en'
-        self.sf_thresh = 0.03
-        self.fmin = 0
-        self.fmax = 15000
-        self.lat = -1
-        self.lon = -1
-        self.week = -1
-        self.slist = ''
+# --- CONFIG ---
+SIG_LENGTH = 3.0
+SIG_OVERLAP = 0.0
+SAMPLE_RATE = 48000
+CONFIDENCE_THRESHOLD = 0.4
+
+def load_labels(labels_file):
+    labels = []
+    with open(labels_file, 'r') as f:
+        for line in f.readlines():
+            labels.append(line.strip())
+    return labels
+
+def load_audio_ffmpeg(input_path, target_sr=48000):
+    """
+    Uses the system FFmpeg to decode and resample audio to 48kHz Mono.
+    This bypasses Librosa/Numba segfaults.
+    """
+    output_wav = "/tmp/temp_audio.wav"
+    
+    # Command: ffmpeg -y -i input -ar 48000 -ac 1 -c:a pcm_s16le output.wav
+    cmd = [
+        '/usr/bin/ffmpeg', 
+        '-y',                 # Overwrite output
+        '-v', 'error',        # Suppress logs
+        '-i', input_path,     # Input file
+        '-ar', str(target_sr),# Resample to 48k
+        '-ac', '1',           # Mix to Mono
+        '-f', 'wav',          # Force WAV format
+        '-c:a', 'pcm_s16le',  # Force standard 16-bit PCM (for Scipy compatibility)
+        output_wav
+    ]
+    
+    # Run FFmpeg process
+    subprocess.check_call(cmd)
+    
+    # Read the clean WAV file using standard SciPy
+    sr, data = scipy.io.wavfile.read(output_wav)
+    
+    # Convert int16 to float32 between -1.0 and 1.0 (BirdNET expects this)
+    if data.dtype == np.int16:
+        data = data.astype(np.float32) / 32768.0
+    elif data.dtype == np.int32:
+        data = data.astype(np.float32) / 2147483648.0
+    elif data.dtype == np.uint8:
+        data = (data.astype(np.float32) - 128.0) / 128.0
+        
+    return data
+
+def predict(interpreter, samples):
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    
+    # Calculate chunk sizes
+    chunk_size = int(SIG_LENGTH * SAMPLE_RATE)
+    step_size = int((SIG_LENGTH - SIG_OVERLAP) * SAMPLE_RATE)
+    
+    output_data = []
+    
+    # Sliding window inference
+    for i in range(0, len(samples) - chunk_size + 1, step_size):
+        chunk = samples[i:i + chunk_size]
+        
+        # Prepare tensor
+        input_tensor = chunk.reshape(1, chunk_size).astype(np.float32)
+        interpreter.set_tensor(input_details[0]['index'], input_tensor)
+        
+        interpreter.invoke()
+        output_data.append(interpreter.get_tensor(output_details[0]['index'])[0])
+
+    return np.array(output_data)
 
 def lambda_handler(event, context):
-    # 1. REDIRECT ALL WRITES TO /TMP
-    # Numba and other audio libs need this for caching
-    os.environ['NUMBA_CACHE_DIR'] = '/tmp'
-    
-    # 2. OVERRIDE BIRDNET CONFIG
-    # This prevents the library from trying to create '/var/task/birdnet_analyzer/checkpoints'
-    cfg.MODEL_PATH = os.environ.get("MODEL_PATH")
-    cfg.LABELS_FILE = os.environ.get("LABELS_FILE")
-    cfg.CPU_THREADS = 1
-    cfg.TFLITE_THREADS = 1
+    # Setup Paths
+    MODEL_PATH = os.environ.get('MODEL_PATH', '/var/task/model/BirdNET_GLOBAL_6K_V2.4_Model_FP16.tflite')
+    LABELS_FILE = os.environ.get('LABELS_FILE', '/var/task/model/BirdNET_GLOBAL_6K_V2.4_Labels.txt')
 
     processed_count = 0
 
@@ -58,46 +102,51 @@ def lambda_handler(event, context):
         key = unquote_plus(record['s3']['object']['key'])
         logger.info(f"Processing: {key}")
 
-        local_filename = os.path.basename(key)
-        local_wav = os.path.join("/tmp", local_filename)
-        
-        # We must use a unique subfolder in /tmp for the analyzer output
-        output_path = os.path.join("/tmp", "results")
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
+        local_input = os.path.join("/tmp", os.path.basename(key))
         
         try:
-            # Download audio
-            s3_client.download_file(bucket, key, local_wav)
+            # 1. Download
+            s3_client.download_file(bucket, key, local_input)
             
-            # 3. CALL ANALYZE WITH DIRECT FILE PATHS
-            # This bypasses the search for a 'variables' folder
-            args = Args(local_wav, output_path, cfg.MODEL_PATH, cfg.LABELS_FILE)
-            analyze(args)
+            # 2. Decode Audio (The Crash-Proof Way)
+            # This calls FFmpeg directly, avoiding the Python Segfault
+            sig = load_audio_ffmpeg(local_input)
             
-            # Find the generated CSV
-            actual_output_files = glob.glob(f"{output_path}/*.csv")
+            # 3. Load Model
+            interpreter = tflite.Interpreter(model_path=MODEL_PATH, num_threads=1)
+            interpreter.allocate_tensors()
+            labels = load_labels(LABELS_FILE)
+            
+            # 4. Run Inference
+            raw_predictions = predict(interpreter, sig)
+            
+            # 5. Aggregate Results
             tags = {}
-            
-            if actual_output_files:
-                with open(actual_output_files[0], 'r') as f:
-                    lines = f.readlines()
-                    for line in lines:
-                        if "Common name" in line or not line.strip(): continue
-                        parts = line.strip().split(',')
-                        if len(parts) >= 5:
-                            name, conf = parts[3], float(parts[4])
-                            if conf >= args.min_conf:
-                                tags[name] = tags.get(name, 0) + 1
-            
-            # Save to DynamoDB
+            if len(raw_predictions) > 0:
+                for pred_chunk in raw_predictions:
+                    # Get top confident predictions
+                    indices = np.argwhere(pred_chunk >= CONFIDENCE_THRESHOLD).flatten()
+                    for idx in indices:
+                        if idx < len(labels):
+                            # Label format is usually "ID_Scientific_Common"
+                            parts = labels[idx].split('_')
+                            common_name = parts[-1] if len(parts) > 1 else labels[idx]
+                            tags[common_name] = tags.get(common_name, 0) + 1
+
+            logger.info(f"Detected tags: {tags}")
+
+            # 6. Save to DynamoDB
             s3_url = f"https://{bucket}.s3.amazonaws.com/{key}"
-            media_table.put_item(Item={'s3_url': s3_url, 'file_type': 'audio', 'tags': tags})
+            media_table.put_item(Item={
+                's3_url': s3_url,
+                'file_type': 'audio',
+                'tags': tags
+            })
             processed_count += 1
             
-            # Cleanup /tmp to prevent "No space left on device" errors
-            if os.path.exists(local_wav): os.remove(local_wav)
-            shutil.rmtree(output_path)
+            # Cleanup
+            if os.path.exists(local_input): os.remove(local_input)
+            if os.path.exists("/tmp/temp_audio.wav"): os.remove("/tmp/temp_audio.wav")
 
         except Exception as e:
             logger.error(f"Error {key}: {str(e)}")
