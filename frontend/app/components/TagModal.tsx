@@ -2,45 +2,84 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Plus, Tag } from "lucide-react";
+import { X, Plus, Tag, Loader2 } from "lucide-react";
+import { BirdNestAPI, computeTagDiff } from "@/app/lib/api";
 
 interface TagModalProps {
   isOpen: boolean;
   onClose: () => void;
   imageName: string;
-  initialTags: string[];
-  onSave: (tags: string[]) => void;
+  imageUrl: string;
+  initialTags: Record<string, number>;
+  onSaved: () => void;
 }
 
 export default function TagModal({
   isOpen,
   onClose,
   imageName,
+  imageUrl,
   initialTags,
-  onSave,
+  onSaved,
 }: TagModalProps) {
-  const [tags, setTags] = useState<string[]>(initialTags);
-  const [newTag, setNewTag] = useState("");
+  const [tags, setTags] = useState<Record<string, number>>({ ...initialTags });
+  const [newSpecies, setNewSpecies] = useState("");
+  const [newCount, setNewCount] = useState("1");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setTags(initialTags);
+    setTags({ ...initialTags });
+    setError(null);
   }, [initialTags]);
 
   const addTag = () => {
-    if (newTag.trim() && !tags.includes(newTag.trim())) {
-      setTags([...tags, newTag.trim()]);
-      setNewTag("");
+    const species = newSpecies.trim().toLowerCase();
+    const count = parseInt(newCount) || 1;
+    if (species && count > 0) {
+      setTags((prev) => ({
+        ...prev,
+        [species]: (prev[species] || 0) + count,
+      }));
+      setNewSpecies("");
+      setNewCount("1");
     }
   };
 
-  const removeTag = (tag: string) => {
-    setTags(tags.filter((t) => t !== tag));
+  const removeTag = (species: string) => {
+    setTags((prev) => {
+      const next = { ...prev };
+      delete next[species];
+      return next;
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
       addTag();
+    }
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const { additions, removals } = computeTagDiff(initialTags, tags);
+
+      if (removals.length > 0) {
+        await BirdNestAPI.updateTags([imageUrl], 0, removals);
+      }
+      if (additions.length > 0) {
+        await BirdNestAPI.updateTags([imageUrl], 1, additions);
+      }
+
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save tags");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -72,7 +111,9 @@ export default function TagModal({
                   <h3 className="text-base font-semibold text-text-primary">
                     Edit Tags
                   </h3>
-                  <p className="text-xs text-text-tertiary">{imageName}</p>
+                  <p className="max-w-[240px] truncate text-xs text-text-tertiary">
+                    {imageName}
+                  </p>
                 </div>
               </div>
               <motion.button
@@ -87,18 +128,21 @@ export default function TagModal({
 
             <div className="mt-5 flex flex-wrap gap-2">
               <AnimatePresence mode="popLayout">
-                {tags.map((tag) => (
+                {Object.entries(tags).map(([species, count]) => (
                   <motion.span
-                    key={tag}
+                    key={species}
                     layout
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                     className="flex items-center gap-1.5 rounded-full bg-accent-emerald/10 px-3 py-1.5 text-xs font-medium text-accent-emerald"
                   >
-                    {tag}
+                    {species}
+                    <span className="rounded-full bg-accent-emerald/20 px-1.5 text-[10px]">
+                      {count}
+                    </span>
                     <button
-                      onClick={() => removeTag(tag)}
+                      onClick={() => removeTag(species)}
                       className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-accent-emerald/20"
                     >
                       <X className="h-3 w-3" />
@@ -106,7 +150,7 @@ export default function TagModal({
                   </motion.span>
                 ))}
               </AnimatePresence>
-              {tags.length === 0 && (
+              {Object.keys(tags).length === 0 && (
                 <p className="text-sm text-text-tertiary">
                   No tags yet. Add one below.
                 </p>
@@ -116,11 +160,20 @@ export default function TagModal({
             <div className="mt-5 flex gap-2">
               <input
                 type="text"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
+                value={newSpecies}
+                onChange={(e) => setNewSpecies(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Add a tag..."
+                placeholder="Species name..."
                 className="flex-1 rounded-lg border border-border bg-bg-deep px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30 transition-all duration-200"
+              />
+              <input
+                type="number"
+                value={newCount}
+                onChange={(e) => setNewCount(e.target.value)}
+                onKeyDown={handleKeyDown}
+                min="1"
+                placeholder="#"
+                className="w-16 rounded-lg border border-border bg-bg-deep px-2 py-2 text-center text-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30 transition-all duration-200"
               />
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -129,9 +182,12 @@ export default function TagModal({
                 className="flex items-center gap-1.5 rounded-lg bg-accent-gold/10 px-3 py-2 text-sm font-medium text-accent-gold transition-colors hover:bg-accent-gold/20"
               >
                 <Plus className="h-4 w-4" />
-                Add
               </motion.button>
             </div>
+
+            {error && (
+              <p className="mt-3 text-xs text-danger">{error}</p>
+            )}
 
             <div className="mt-6 flex justify-end gap-3">
               <motion.button
@@ -145,12 +201,13 @@ export default function TagModal({
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  onSave(tags);
-                  onClose();
-                }}
-                className="rounded-lg bg-accent-gold px-4 py-2 text-sm font-semibold text-bg-deep transition-colors hover:bg-accent-gold-light"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 rounded-lg bg-accent-gold px-4 py-2 text-sm font-semibold text-bg-deep transition-colors hover:bg-accent-gold-light disabled:opacity-60"
               >
+                {isSaving && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                )}
                 Save Tags
               </motion.button>
             </div>

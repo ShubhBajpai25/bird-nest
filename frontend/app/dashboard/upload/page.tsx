@@ -13,13 +13,15 @@ import {
   FileWarning,
 } from "lucide-react";
 import PageTransition from "@/app/components/PageTransition";
+import { BirdNestAPI } from "@/app/lib/api";
 
 interface UploadFile {
   id: string;
   file: File;
   type: "image" | "audio" | "video";
-  progress: number;
   status: "pending" | "uploading" | "done" | "error";
+  s3Key?: string;
+  error?: string;
   preview?: string;
 }
 
@@ -44,7 +46,6 @@ export default function UploadPage() {
       id: Math.random().toString(36).slice(2),
       file,
       type: getFileType(file),
-      progress: 0,
       status: "pending" as const,
       preview: file.type.startsWith("image/")
         ? URL.createObjectURL(file)
@@ -76,33 +77,31 @@ export default function UploadPage() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  const simulateUpload = () => {
+  const uploadAll = async () => {
+    const pending = files.filter((f) => f.status === "pending");
+
     setFiles((prev) =>
       prev.map((f) =>
         f.status === "pending" ? { ...f, status: "uploading" as const } : f
       )
     );
-    const interval = setInterval(() => {
-      setFiles((prev) => {
-        const updated = prev.map((f) => {
-          if (f.status === "uploading") {
-            const newProgress = Math.min(f.progress + Math.random() * 20, 100);
-            return {
-              ...f,
-              progress: newProgress,
-              status:
-                newProgress >= 100
-                  ? ("done" as const)
-                  : ("uploading" as const),
-            };
-          }
-          return f;
-        });
-        if (updated.every((f) => f.status !== "uploading"))
-          clearInterval(interval);
-        return updated;
-      });
-    }, 300);
+
+    for (const pf of pending) {
+      const result = await BirdNestAPI.uploadFile(pf.file);
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === pf.id
+            ? result.success
+              ? { ...f, status: "done" as const, s3Key: result.key }
+              : {
+                  ...f,
+                  status: "error" as const,
+                  error: result.error,
+                }
+            : f
+        )
+      );
+    }
   };
 
   return (
@@ -198,7 +197,7 @@ export default function UploadPage() {
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
-                  onClick={simulateUpload}
+                  onClick={uploadAll}
                   disabled={files.every((f) => f.status !== "pending")}
                   className="flex items-center gap-2 rounded-lg bg-accent-gold px-4 py-2 text-sm font-semibold text-bg-deep transition-colors hover:bg-accent-gold-light disabled:opacity-40"
                 >
@@ -248,10 +247,21 @@ export default function UploadPage() {
                             <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-bg-hover">
                               <motion.div
                                 className="h-full rounded-full bg-accent-gold"
-                                animate={{ width: `${f.progress}%` }}
-                                transition={{ duration: 0.3 }}
+                                initial={{ width: "0%" }}
+                                animate={{ width: "90%" }}
+                                transition={{ duration: 8, ease: "easeOut" }}
                               />
                             </div>
+                          )}
+                          {f.status === "done" && f.s3Key && (
+                            <p className="mt-1 truncate text-[10px] text-accent-emerald">
+                              {f.s3Key}
+                            </p>
+                          )}
+                          {f.status === "error" && f.error && (
+                            <p className="mt-1 truncate text-[10px] text-danger">
+                              {f.error}
+                            </p>
                           )}
                         </div>
 
