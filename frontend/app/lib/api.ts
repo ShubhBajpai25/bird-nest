@@ -168,7 +168,31 @@ export const BirdNestAPI = {
     }
     return BirdNestAPI.searchByFile(s3Url);
   },
+
+  /**
+   * Poll DynamoDB until the AI detection tags appear for a given S3 URL.
+   * Retries up to `attempts` times with a 1-second delay between each.
+   */
+  pollForResults: async (
+    s3Url: string,
+    attempts = 30
+  ): Promise<FileMetadata> => {
+    for (let i = 0; i < attempts; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        const data = await BirdNestAPI.searchByFile(s3Url);
+        if (data && data.tags && Object.keys(data.tags).length > 0) {
+          return data;
+        }
+      } catch {
+        // File not yet indexed — keep polling
+      }
+    }
+    throw new Error("Timeout: AI took too long to process.");
+  },
 };
+
+export const S3_BUCKET_URL = "https://birdnest-app-storage.s3.amazonaws.com";
 
 // ── Tag diff helper (used by TagModal) ──────────────────────────
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
@@ -11,9 +11,17 @@ import {
   Check,
   CloudUpload,
   FileWarning,
+  ChevronLeft,
+  ChevronRight,
+  Bird,
+  Loader2,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 import PageTransition from "@/app/components/PageTransition";
-import { BirdNestAPI } from "@/app/lib/api";
+import { BirdNestAPI, S3_BUCKET_URL, type FileMetadata } from "@/app/lib/api";
+
+// ── Types ───────────────────────────────────────────────────────
 
 interface UploadFile {
   id: string;
@@ -23,6 +31,20 @@ interface UploadFile {
   s3Key?: string;
   error?: string;
   preview?: string;
+}
+
+interface DetectionResult {
+  id: string;
+  fileName: string;
+  fileType: "image" | "audio" | "video";
+  s3Url: string;
+  preview?: string;
+  status: "processing" | "done" | "error";
+  tags?: Record<string, number>;
+  thumbnailUrl?: string;
+  startTime: number;
+  elapsedMs: number;
+  error?: string;
 }
 
 const typeConfig = {
@@ -37,9 +59,43 @@ function getFileType(file: File): "image" | "audio" | "video" {
   return "video";
 }
 
+function formatTime(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  const tenths = Math.floor((ms % 1000) / 100);
+  if (mins > 0) return `${mins}m ${secs}.${tenths}s`;
+  return `${secs}.${tenths}s`;
+}
+
+// ── Timer sub-component ─────────────────────────────────────────
+
+function LiveTimer({ startTime }: { startTime: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(interval);
+  }, []);
+  return <span>{formatTime(now - startTime)}</span>;
+}
+
+// ── Main component ──────────────────────────────────────────────
+
 export default function UploadPage() {
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [detections, setDetections] = useState<DetectionResult[]>([]);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const pollingRef = useRef<Set<string>>(new Set());
+
+  // Keep activeIdx in bounds
+  useEffect(() => {
+    if (detections.length > 0 && activeIdx >= detections.length) {
+      setActiveIdx(detections.length - 1);
+    }
+  }, [detections.length, activeIdx]);
+
+  // ── File handling ──────────────────────────────────
 
   const handleFiles = useCallback((fileList: FileList) => {
     const newFiles: UploadFile[] = Array.from(fileList).map((file) => ({
@@ -77,6 +133,55 @@ export default function UploadPage() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
+  // ── Polling logic ──────────────────────────────────
+
+  const startPolling = useCallback(
+    (detectionId: string, s3Url: string) => {
+      if (pollingRef.current.has(detectionId)) return;
+      pollingRef.current.add(detectionId);
+
+      (async () => {
+        try {
+          const result: FileMetadata = await BirdNestAPI.pollForResults(s3Url);
+          const endTime = Date.now();
+          setDetections((prev) =>
+            prev.map((d) =>
+              d.id === detectionId
+                ? {
+                    ...d,
+                    status: "done" as const,
+                    tags: result.tags || {},
+                    thumbnailUrl: result.thumbnail_s3_url,
+                    elapsedMs: endTime - d.startTime,
+                  }
+                : d
+            )
+          );
+        } catch (err) {
+          const endTime = Date.now();
+          setDetections((prev) =>
+            prev.map((d) =>
+              d.id === detectionId
+                ? {
+                    ...d,
+                    status: "error" as const,
+                    error:
+                      err instanceof Error ? err.message : "Detection failed",
+                    elapsedMs: endTime - d.startTime,
+                  }
+                : d
+            )
+          );
+        } finally {
+          pollingRef.current.delete(detectionId);
+        }
+      })();
+    },
+    []
+  );
+
+  // ── Upload + poll ──────────────────────────────────
+
   const uploadAll = async () => {
     const pending = files.filter((f) => f.status === "pending");
 
@@ -88,21 +193,55 @@ export default function UploadPage() {
 
     for (const pf of pending) {
       const result = await BirdNestAPI.uploadFile(pf.file);
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === pf.id
-            ? result.success
+
+      if (result.success && result.key) {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === pf.id
               ? { ...f, status: "done" as const, s3Key: result.key }
-              : {
-                  ...f,
-                  status: "error" as const,
-                  error: result.error,
-                }
-            : f
-        )
-      );
+              : f
+          )
+        );
+
+        const s3Url = `${S3_BUCKET_URL}/${result.key}`;
+        const detId = pf.id + "-det";
+        const newDetection: DetectionResult = {
+          id: detId,
+          fileName: pf.file.name,
+          fileType: getFileType(pf.file),
+          s3Url,
+          preview: pf.preview,
+          status: "processing",
+          startTime: Date.now(),
+          elapsedMs: 0,
+        };
+
+        setDetections((prev) => {
+          setActiveIdx(prev.length);
+          return [...prev, newDetection];
+        });
+        startPolling(detId, s3Url);
+      } else {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === pf.id
+              ? { ...f, status: "error" as const, error: result.error }
+              : f
+          )
+        );
+      }
     }
   };
+
+  // ── Carousel nav ───────────────────────────────────
+
+  const goLeft = () => setActiveIdx((i) => Math.max(0, i - 1));
+  const goRight = () =>
+    setActiveIdx((i) => Math.min(detections.length - 1, i + 1));
+
+  const activeDet = detections[activeIdx] ?? null;
+
+  // ── Render ─────────────────────────────────────────
 
   return (
     <PageTransition>
@@ -117,6 +256,7 @@ export default function UploadPage() {
           </p>
         </div>
 
+        {/* ── Drop zone ── */}
         <motion.div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -183,6 +323,7 @@ export default function UploadPage() {
           </div>
         </motion.div>
 
+        {/* ── File list ── */}
         <AnimatePresence>
           {files.length > 0 && (
             <motion.div
@@ -291,6 +432,236 @@ export default function UploadPage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ── Detection Results ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mt-8"
+        >
+          <div className="mb-4 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-accent-gold" />
+            <h2 className="text-sm font-semibold text-text-primary">
+              Detection Results
+            </h2>
+            {detections.length > 1 && (
+              <span className="ml-auto text-xs text-text-tertiary">
+                {activeIdx + 1} / {detections.length}
+              </span>
+            )}
+          </div>
+
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-surface/60">
+            {detections.length === 0 ? (
+              /* ── Empty state ── */
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover/60">
+                  <Bird className="h-6 w-6 text-text-tertiary" />
+                </div>
+                <p className="text-sm font-medium text-text-secondary">
+                  Detection results will appear here
+                </p>
+                <p className="mt-1 max-w-xs text-center text-xs text-text-tertiary">
+                  Upload your bird images or videos and the AI will
+                  automatically identify species. Results for each upload will be
+                  shown in this section.
+                </p>
+              </div>
+            ) : (
+              /* ── Carousel content ── */
+              <div className="relative">
+                {/* Left arrow */}
+                {detections.length > 1 && activeIdx > 0 && (
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={goLeft}
+                    className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </motion.button>
+                )}
+
+                {/* Right arrow */}
+                {detections.length > 1 &&
+                  activeIdx < detections.length - 1 && (
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={goRight}
+                      className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </motion.button>
+                  )}
+
+                <AnimatePresence mode="wait">
+                  {activeDet && (
+                    <motion.div
+                      key={activeDet.id}
+                      initial={{ opacity: 0, x: 40 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -40 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      {activeDet.status === "processing" ? (
+                        /* ── Processing state ── */
+                        <div className="flex flex-col items-center py-14">
+                          <div className="relative mb-5">
+                            {activeDet.preview ? (
+                              <div className="relative h-40 w-40 overflow-hidden rounded-2xl border border-border">
+                                <img
+                                  src={activeDet.preview}
+                                  alt=""
+                                  className="h-full w-full object-cover opacity-60"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                  <Loader2 className="h-8 w-8 animate-spin text-accent-gold" />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex h-40 w-40 items-center justify-center rounded-2xl border border-border bg-bg-deep">
+                                <Loader2 className="h-8 w-8 animate-spin text-accent-gold" />
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-sm font-semibold text-text-primary">
+                            Analyzing{" "}
+                            <span className="text-accent-gold">
+                              {activeDet.fileName}
+                            </span>
+                          </p>
+                          <p className="mt-1 text-xs text-text-tertiary">
+                            AI is identifying bird species...
+                          </p>
+                          <div className="mt-4 flex items-center gap-1.5 rounded-full bg-accent-gold/10 px-3 py-1.5 text-xs font-medium text-accent-gold">
+                            <Clock className="h-3.5 w-3.5" />
+                            <LiveTimer startTime={activeDet.startTime} />
+                          </div>
+                        </div>
+                      ) : activeDet.status === "error" ? (
+                        /* ── Error state ── */
+                        <div className="flex flex-col items-center py-14">
+                          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-danger/10">
+                            <FileWarning className="h-6 w-6 text-danger" />
+                          </div>
+                          <p className="text-sm font-semibold text-text-primary">
+                            Detection failed for{" "}
+                            <span className="text-danger">
+                              {activeDet.fileName}
+                            </span>
+                          </p>
+                          <p className="mt-1 text-xs text-text-tertiary">
+                            {activeDet.error}
+                          </p>
+                          <div className="mt-3 flex items-center gap-1.5 text-xs text-text-tertiary">
+                            <Clock className="h-3 w-3" />
+                            {formatTime(activeDet.elapsedMs)}
+                          </div>
+                        </div>
+                      ) : (
+                        /* ── Success state ── */
+                        <div className="p-5">
+                          <div className="flex flex-col gap-5 sm:flex-row">
+                            {/* Image / Thumbnail */}
+                            <div className="shrink-0">
+                              {activeDet.thumbnailUrl ? (
+                                <img
+                                  src={activeDet.thumbnailUrl}
+                                  alt={activeDet.fileName}
+                                  className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
+                                />
+                              ) : activeDet.preview ? (
+                                <img
+                                  src={activeDet.preview}
+                                  alt={activeDet.fileName}
+                                  className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
+                                />
+                              ) : (
+                                <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-border bg-bg-deep">
+                                  <Video className="h-10 w-10 text-text-tertiary" />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Details */}
+                            <div className="flex-1">
+                              <div className="mb-1 flex items-center gap-2">
+                                <Check className="h-4 w-4 text-accent-emerald" />
+                                <h3 className="text-base font-semibold text-text-primary">
+                                  Detection Complete
+                                </h3>
+                              </div>
+                              <p className="mb-4 truncate text-xs text-text-tertiary">
+                                {activeDet.fileName}
+                              </p>
+
+                              {activeDet.tags &&
+                              Object.keys(activeDet.tags).length > 0 ? (
+                                <div className="space-y-2">
+                                  {Object.entries(activeDet.tags).map(
+                                    ([species, count]) => (
+                                      <div
+                                        key={species}
+                                        className="flex items-center justify-between rounded-lg border border-border bg-bg-deep px-4 py-2.5"
+                                      >
+                                        <div className="flex items-center gap-2.5">
+                                          <Bird className="h-4 w-4 text-accent-gold" />
+                                          <span className="text-sm font-semibold capitalize text-text-primary">
+                                            {species}
+                                          </span>
+                                        </div>
+                                        <span className="rounded-full bg-accent-emerald/10 px-2.5 py-0.5 text-xs font-bold text-accent-emerald">
+                                          {count}
+                                        </span>
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-text-tertiary">
+                                  No species detected.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Footer: elapsed time */}
+                          <div className="mt-4 flex items-center justify-end gap-1.5 border-t border-border pt-3 text-[11px] text-text-tertiary">
+                            <Clock className="h-3 w-3" />
+                            Processed in {formatTime(activeDet.elapsedMs)}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Dot indicators */}
+                {detections.length > 1 && (
+                  <div className="flex items-center justify-center gap-1.5 border-t border-border py-3">
+                    {detections.map((d, i) => (
+                      <button
+                        key={d.id}
+                        onClick={() => setActiveIdx(i)}
+                        className={`h-2 rounded-full transition-all duration-200 ${
+                          i === activeIdx
+                            ? "w-5 bg-accent-gold"
+                            : d.status === "processing"
+                              ? "w-2 bg-accent-gold/30"
+                              : d.status === "error"
+                                ? "w-2 bg-danger/40"
+                                : "w-2 bg-accent-emerald/40"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </motion.div>
       </div>
     </PageTransition>
   );

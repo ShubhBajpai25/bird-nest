@@ -104,5 +104,21 @@ export const BirdNestAPI = {
       body: JSON.stringify({ urls, operation, tags }),
     });
     return response.json();
+  },
+  
+  pollForResults: async (s3Url, attempts = 10) => {
+    for (let i = 0; i < attempts; i++) {
+      // Wait 1 second between checks
+      await new Promise(r => setTimeout(r, 1000));
+      
+      const data = await BirdNestAPI.searchByFile(s3Url);
+      
+      // Check if the Vision Lambda has finished (tags exist)
+      if (data && data.tags && Object.keys(data.tags).length > 0) {
+        return data; // Success! Return the full item with tags
+      }
+    }
+    throw new Error("Timeout: AI took too long to process.");
   }
+
 };
