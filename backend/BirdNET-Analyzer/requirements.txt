@@ -1,7 +1,18 @@
+# Core ML
+tflite-runtime==2.13.0
+scikit-learn<1.4
+
+# Audio Processing
 librosa==0.10.1
-numba==0.58.1
+soundfile==0.12.1
 resampy==0.4.3
+numpy<1.25.0
+scipy<1.11.0
+
+# Explicitly pin Numba/LLVM to versions with ARM64 wheels
+numba==0.58.1
 llvmlite==0.41.1
-soundfile
-tensorflow-cpu==2.15.1
-tqdm
+
+# AWS & Utilities
+boto3
+requests

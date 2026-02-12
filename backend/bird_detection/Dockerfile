@@ -1,7 +1,7 @@
 # Use AWS Lambda Python runtime
 FROM public.ecr.aws/lambda/python:3.10
 
-# 1. Install system dependencies (Keeping gcc/make just in case, but usually not needed if we avoid compilation)
+# Install system dependencies
 RUN yum update -y && yum install -y \
     mesa-libGL \
     libXext \
@@ -12,25 +12,21 @@ RUN yum update -y && yum install -y \
     make \
     && yum clean all
 
-# 2. Copy requirements first
+# Copy requirements
 COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 
-# 3. CRITICAL OPTIMIZATION: Install CPU-only Torch first
-# This prevents downloading the massive GPU version
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# --- ARM64 CHANGE ---
+# Just install standard torch. On ARM64 Linux, this is already CPU-only and optimized.
+RUN pip install --no-cache-dir torch torchvision
 
-# 4. Install the rest of the requirements
-# We use --no-deps for ultralytics effectively because we manually installed torch above
+# Install other requirements
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Copy the application code
-COPY detect_birds.py ${LAMBDA_TASK_ROOT}/
-COPY lambda_handler.py ${LAMBDA_TASK_ROOT}/
+# Copy the code
+COPY detect_birds.py lambda_handler.py ${LAMBDA_TASK_ROOT}/
 
-# 6. Set environment variables
-# YOLO needs a writable config dir in Lambda
+# Set environment variables
 ENV YOLO_CONFIG_DIR=/tmp
 ENV PYTHONPATH=${LAMBDA_TASK_ROOT}
 
-# Set the Lambda handler
 CMD ["lambda_handler.lambda_handler"]
