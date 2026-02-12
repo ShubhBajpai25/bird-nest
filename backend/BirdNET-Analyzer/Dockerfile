@@ -1,12 +1,14 @@
 FROM public.ecr.aws/lambda/python:3.10
 
-# 1. Install System Dependencies
+# 1. Install System Dependencies (Added hdf5-devel and pkgconfig)
 RUN yum update -y && yum install -y \
     gcc \
     gcc-c++ \
     make \
     libsndfile \
     libsndfile-devel \
+    hdf5-devel \
+    pkgconfig \
     wget \
     tar \
     xz \
@@ -24,7 +26,6 @@ RUN wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.t
 # 3. Python Setup
 COPY requirements.txt .
 
-# SAFETY NET: Downgrade setuptools to prevent build errors for older packages
 RUN pip install --upgrade pip
 RUN pip install "setuptools<70.0.0"
 

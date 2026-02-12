@@ -1,12 +1,13 @@
-import csv
 import json
 import boto3
 import os
 import shutil
+import glob
 from urllib.parse import unquote_plus
 import logging
-# Import the analyze function from your local folder
-from birdnet_analyzer.analyze.core import analyze
+
+# Import official analyzer
+from birdnet_analyzer.analyze import analyze
 from birdnet_analyzer import config as cfg
 
 logger = logging.getLogger()
@@ -15,17 +16,38 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource('dynamodb')
 TABLE_NAME = os.environ.get('TABLE_NAME', 'MediaFiles')
 media_table = dynamodb.Table(TABLE_NAME)
-
 s3_client = boto3.client('s3')
 
+class Args:
+    def __init__(self, i, o, m, l):
+        self.i = i
+        self.o = o
+        self.model = m # Path to .tflite file
+        self.labels = l # Path to labels .txt
+        self.min_conf = 0.4
+        self.sensitivity = 1.0
+        self.overlap = 0.0
+        self.rtype = 'csv'
+        self.threads = 1
+        self.batch_size = 1
+        self.locale = 'en'
+        self.sf_thresh = 0.03
+        self.fmin = 0
+        self.fmax = 15000
+        self.lat = -1
+        self.lon = -1
+        self.week = -1
+        self.slist = ''
+
 def lambda_handler(event, context):
-    # Load config from Env Vars
-    cfg.MODEL_PATH = os.environ["MODEL_PATH"]
-    cfg.MDATA_MODEL_PATH = os.environ["MDATA_MODEL_PATH"]
-    cfg.LABELS_FILE = os.environ["LABELS_FILE"]
+    # 1. REDIRECT ALL WRITES TO /TMP
+    # Numba and other audio libs need this for caching
+    os.environ['NUMBA_CACHE_DIR'] = '/tmp'
     
-    # LIMIT THREADS (Crucial for Lambda)
-    # TensorFlow will try to use all cores and might get throttled
+    # 2. OVERRIDE BIRDNET CONFIG
+    # This prevents the library from trying to create '/var/task/birdnet_analyzer/checkpoints'
+    cfg.MODEL_PATH = os.environ.get("MODEL_PATH")
+    cfg.LABELS_FILE = os.environ.get("LABELS_FILE")
     cfg.CPU_THREADS = 1
     cfg.TFLITE_THREADS = 1
 
@@ -34,65 +56,51 @@ def lambda_handler(event, context):
     for record in event['Records']:
         bucket = record['s3']['bucket']['name']
         key = unquote_plus(record['s3']['object']['key'])
-        
-        logger.info(f"Processing audio: {key}")
+        logger.info(f"Processing: {key}")
 
-        # Define paths in /tmp
         local_filename = os.path.basename(key)
         local_wav = os.path.join("/tmp", local_filename)
-        output_dir = "/tmp/output"
         
-        # Clear previous run data
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
-        os.makedirs(output_dir, exist_ok=True)
-
+        # We must use a unique subfolder in /tmp for the analyzer output
+        output_path = os.path.join("/tmp", "results")
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        
         try:
-            # 1. Download
+            # Download audio
             s3_client.download_file(bucket, key, local_wav)
             
-            # 2. Analyze
-            # This writes a CSV file into output_dir
-            analyze(
-                audio_input=local_wav,
-                output_dir=output_dir,
-                rtype="csv",
-                threads=1
-            )
-
-            # 3. Parse Results
+            # 3. CALL ANALYZE WITH DIRECT FILE PATHS
+            # This bypasses the search for a 'variables' folder
+            args = Args(local_wav, output_path, cfg.MODEL_PATH, cfg.LABELS_FILE)
+            analyze(args)
+            
+            # Find the generated CSV
+            actual_output_files = glob.glob(f"{output_path}/*.csv")
             tags = {}
-            # Find the generated CSV file
-            for f in os.listdir(output_dir):
-                if f.endswith('.csv'):
-                    path = os.path.join(output_dir, f)
-                    with open(path, mode='r', encoding='utf-8') as csvfile:
-                        reader = csv.DictReader(csvfile)
-                        for row in reader:
-                            # Check different column name possibilities
-                            name = row.get("Common name") or row.get("Common Name")
-                            conf = float(row.get("Confidence", 0))
-                            
-                            if name and conf > 0.4: # Filter weak predictions
+            
+            if actual_output_files:
+                with open(actual_output_files[0], 'r') as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        if "Common name" in line or not line.strip(): continue
+                        parts = line.strip().split(',')
+                        if len(parts) >= 5:
+                            name, conf = parts[3], float(parts[4])
+                            if conf >= args.min_conf:
                                 tags[name] = tags.get(name, 0) + 1
             
-            logger.info(f"Tags found: {tags}")
-
-            # 4. Save to DynamoDB
+            # Save to DynamoDB
             s3_url = f"https://{bucket}.s3.amazonaws.com/{key}"
-            item = {
-                's3_url': s3_url,
-                'file_type': 'audio',
-                'tags': tags
-            }
-            media_table.put_item(Item=item)
+            media_table.put_item(Item={'s3_url': s3_url, 'file_type': 'audio', 'tags': tags})
             processed_count += 1
+            
+            # Cleanup /tmp to prevent "No space left on device" errors
+            if os.path.exists(local_wav): os.remove(local_wav)
+            shutil.rmtree(output_path)
 
         except Exception as e:
-            logger.error(f"Failed to process {key}: {e}")
+            logger.error(f"Error {key}: {str(e)}")
             continue
 
-    return {
-        'statusCode': 200,
-        'body': json.dumps(f'Processed {processed_count} audio files.')
-    }
+    return {'statusCode': 200, 'body': json.dumps(f'Processed {processed_count} files.')}
