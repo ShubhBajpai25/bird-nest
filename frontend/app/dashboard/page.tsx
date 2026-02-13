@@ -24,7 +24,7 @@ export default function DashboardPage() {
             What would you like to do?
           </h1>
           <p className="mt-2 text-sm text-text-secondary">
-            Choose an action below to get started
+            Choose between what interests you most!
           </p>
         </motion.div>
 
@@ -44,7 +44,7 @@ export default function DashboardPage() {
                 <Camera className="h-12 w-12 text-accent-gold" />
               </div>
               <h2 className="mb-3 text-xl font-bold text-text-primary">
-                Scan
+                Scan a Photo/Video!
               </h2>
               <p className="mb-6 max-w-xs text-sm leading-relaxed text-text-secondary">
                 Scan a recent sighting to know which bird it is and receive a fun fact about the bird!
