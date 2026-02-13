@@ -46,22 +46,43 @@ def process_s3_file(bucket_name, object_key):
     MODEL_BUCKET = os.environ.get('MODEL_BUCKET', bucket_name)
     MODEL_KEY = os.environ.get('MODEL_KEY', 'models/model.pt')
     CONFIDENCE = float(os.environ.get('CONFIDENCE_THRESHOLD', '0.5'))
+
+    # --- 1. ROBUST METADATA EXTRACTION (Keep this one!) ---
+    logger.info(f"🔍 INSPECTING METADATA for {object_key}")
+    user_id = 'anonymous-user' # Default
     
-    # 1. OPTIMIZATION: Check /tmp cache first for the model
-    # This prevents re-downloading the 50MB model on every run (Warm Start)
+    try:
+        response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
+        raw_metadata = response.get('Metadata', {})
+        logger.info(f"RAW METADATA FROM S3: {json.dumps(raw_metadata)}")
+        
+        # Search for the ID (Case-insensitive)
+        for key, value in raw_metadata.items():
+            # AWS S3 metadata often comes as 'x-amz-meta-userid' or just 'userid'
+            clean_key = key.lower().replace('x-amz-meta-', '')
+            if clean_key == 'userid':
+                user_id = value
+                break
+        
+        logger.info(f"✅ FINAL RESOLVED USER ID: {user_id}")
+
+    except Exception as e:
+        logger.error(f"❌ FAILED TO GET METADATA: {str(e)}")
+    
+    # 2. OPTIMIZATION: Check /tmp cache first for the model
     model_path = '/tmp/model.pt'
     if not os.path.exists(model_path):
         logger.info(f"Downloading model from {MODEL_BUCKET}/{MODEL_KEY}...")
         s3_client.download_file(MODEL_BUCKET, MODEL_KEY, model_path)
     
     with tempfile.TemporaryDirectory() as temp_dir:
-        # 2. Download the Media File
+        # 3. Download the Media File
         input_filename = os.path.basename(object_key)
         input_path = os.path.join(temp_dir, input_filename)
         logger.info(f"Downloading media file: {object_key}")
         s3_client.download_file(bucket_name, object_key, input_path)
         
-        # 3. Run Detection (This calls your detect_birds.py)
+        # 4. Run Detection
         output_dir = os.path.join(temp_dir, 'output')
         results = detect_birds_in_file(
             input_path=input_path,
@@ -70,39 +91,34 @@ def process_s3_file(bucket_name, object_key):
             model_path=model_path
         )
 
-        # --- 1. EXTRACT USER ID FROM S3 METADATA ---
-        # We fetch the metadata from the object to see who uploaded it
-        response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
-        # S3 metadata keys are always converted to lowercase by AWS
-        metadata = response.get('Metadata', {})
-        user_id = metadata.get('userid', 'anonymous-user')
+        # (Deleted duplicate metadata extraction block here)
         
-        # 2. Get detection results
+        # 5. Get detection results
         tags = results.get('birds', {})
         file_type = results.get('file_type', 'unknown')
             
-        # 4. Predict the Thumbnail URL
-        # Since we use a separate Lambda for thumbnails, we predict the URL 
-        # so the frontend works immediately without waiting for the other Lambda.
+        # 6. Predict the Thumbnail URL
         s3_url = f"https://{bucket_name}.s3.amazonaws.com/{object_key}"
         
         thumbnail_url = None
         if file_type == 'image':
             filename_no_ext = os.path.splitext(input_filename)[0]
-            # Must match the naming convention in your Thumbnail Lambda
             thumbnail_key = f"thumbnails/{filename_no_ext}-thumb.jpg"
             thumbnail_url = f"https://{bucket_name}.s3.amazonaws.com/{thumbnail_key}"
 
-        # 5. Store in DynamoDB
+        # 7. Store in DynamoDB
         item = {
             's3_url': s3_url,
-            'user_id': user_id,
+            'user_id': user_id,  # Uses the variable from step 1
             'file_type': file_type,
             'tags': tags
         }
-        # Only add thumbnail field if it exists
+        
         if thumbnail_url:
             item['thumbnail_s3_url'] = thumbnail_url
             
+        # Clean up item to remove None values just in case
+        item = {k: v for k, v in item.items() if v is not None}
+
         media_table.put_item(Item=item)
-        logger.info(f"Successfully tagged {object_key}: {tags}")
+        logger.info(f"Successfully tagged {object_key} for User {user_id}: {tags}")

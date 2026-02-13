@@ -66,12 +66,6 @@ const quickActions = [
     icon: ImageIcon,
     desc: "View your bird collection",
   },
-  {
-    label: "Search Birds",
-    href: "/dashboard/search",
-    icon: Search,
-    desc: "Find species in your library",
-  },
 ];
 
 export default function DashboardPage() {
