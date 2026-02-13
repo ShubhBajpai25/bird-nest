@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Bird, Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Bird, Mail, Lock, ArrowRight, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { signIn } from "aws-amplify/auth"; // <--- Import Amplify
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,34 +13,34 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null); // <--- Error State
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsLoading(false);
-    router.push("/dashboard");
+    setError(null);
+
+    try {
+      // 1. Call Amplify Sign In
+      const { isSignedIn, nextStep } = await signIn({ username: email, password });
+      
+      if (isSignedIn) {
+        router.push("/dashboard/gallery");
+      } else if (nextStep.signInStep === "CONFIRM_SIGN_UP") {
+        // Handle unconfirmed users (optional edge case)
+        setError("Please check your email to verify your account.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to sign in. Please check your credentials.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-bg-deep nature-bg">
-      <div className="pointer-events-none absolute inset-0">
-        <motion.div
-          animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.1, 1] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-accent-emerald/5 blur-3xl"
-        />
-        <motion.div
-          animate={{ opacity: [0.2, 0.5, 0.2], scale: [1, 1.15, 1] }}
-          transition={{
-            duration: 10,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 2,
-          }}
-          className="absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-accent-gold/5 blur-3xl"
-        />
-      </div>
+      {/* ... (Keep your background motion divs) ... */}
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -62,6 +63,18 @@ export default function LoginPage() {
           </p>
         </motion.div>
 
+        {/* ERROR MESSAGE DISPLAY */}
+        {error && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }} 
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-500"
+            >
+              <AlertCircle className="h-4 w-4" />
+              {error}
+            </motion.div>
+        )}
+
         <motion.form
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -69,7 +82,9 @@ export default function LoginPage() {
           onSubmit={handleSubmit}
           className="rounded-2xl border border-border bg-bg-surface/80 p-6 backdrop-blur-sm"
         >
-          <div className="mb-4">
+          {/* ... (Keep your Email and Password Inputs exactly as they were) ... */}
+          
+           <div className="mb-4">
             <label className="mb-1.5 block text-xs font-medium text-text-secondary">
               Email
             </label>
@@ -114,6 +129,7 @@ export default function LoginPage() {
             </div>
           </div>
 
+
           <motion.button
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
@@ -122,11 +138,7 @@ export default function LoginPage() {
             className="group flex w-full items-center justify-center gap-2 rounded-lg bg-accent-gold py-2.5 text-sm font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-gold-light disabled:opacity-60"
           >
             {isLoading ? (
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                className="h-4 w-4 rounded-full border-2 border-bg-deep/30 border-t-bg-deep"
-              />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
                 Sign In
