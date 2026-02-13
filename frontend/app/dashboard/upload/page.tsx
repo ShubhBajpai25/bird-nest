@@ -210,7 +210,7 @@ export default function UploadPage() {
           fileName: pf.file.name,
           fileType: getFileType(pf.file),
           s3Url,
-          preview: pf.preview,
+          preview: s3Url,
           status: "processing",
           startTime: Date.now(),
           elapsedMs: 0,
