@@ -69,13 +69,18 @@ def process_s3_file(bucket_name, object_key):
             confidence=CONFIDENCE,
             model_path=model_path
         )
+
+        # --- 1. EXTRACT USER ID FROM S3 METADATA ---
+        # We fetch the metadata from the object to see who uploaded it
+        response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
+        # S3 metadata keys are always converted to lowercase by AWS
+        metadata = response.get('Metadata', {})
+        user_id = metadata.get('userid', 'anonymous-user')
         
-        # --- THE LOGIC FIX IS HERE ---
-        # Old code looked for 'detections' list.
-        # New code correctly grabs the 'birds' dictionary your script returns.
+        # 2. Get detection results
         tags = results.get('birds', {})
         file_type = results.get('file_type', 'unknown')
-        
+            
         # 4. Predict the Thumbnail URL
         # Since we use a separate Lambda for thumbnails, we predict the URL 
         # so the frontend works immediately without waiting for the other Lambda.
@@ -91,6 +96,7 @@ def process_s3_file(bucket_name, object_key):
         # 5. Store in DynamoDB
         item = {
             's3_url': s3_url,
+            'user_id': user_id,
             'file_type': file_type,
             'tags': tags
         }

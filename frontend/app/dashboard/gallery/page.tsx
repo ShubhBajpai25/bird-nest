@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2,
@@ -12,32 +12,25 @@ import {
   AlertCircle,
   Upload,
   X,
-  Hash,
   Camera,
-  ChevronUp,
-  ChevronDown,
 } from "lucide-react";
 import PageTransition from "@/app/components/PageTransition";
 import TagModal from "@/app/components/TagModal";
 import { BirdNestAPI, type GalleryItem, type FileMetadata } from "@/app/lib/api";
 
 export default function GalleryPage() {
-  const [items, setItems] = useState<GalleryItem[]>([]);
-  const [searchSpecies, setSearchSpecies] = useState("");
-  const [minCount, setMinCount] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+  // Full gallery fetched from backend
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [loadingMetadataFor, setLoadingMetadataFor] = useState<Set<string>>(
-    new Set()
-  );
+
+  // Local search filter
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Image search state
   const [imageSearchOpen, setImageSearchOpen] = useState(false);
   const [searchImageFile, setSearchImageFile] = useState<File | null>(null);
-  const [searchImagePreview, setSearchImagePreview] = useState<string | null>(
-    null
-  );
+  const [searchImagePreview, setSearchImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageSearchResult, setImageSearchResult] = useState<FileMetadata | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -45,77 +38,45 @@ export default function GalleryPage() {
   // Tag modal state
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null);
   const [tagModalOpen, setTagModalOpen] = useState(false);
-  const [isLoadingTags, setIsLoadingTags] = useState(false);
   const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
 
-  // Auto-load metadata for all items when results come in
+  // Fetch gallery on mount
   useEffect(() => {
-    const loadMeta = async (item: GalleryItem) => {
-      if (item.metadataLoaded || loadingMetadataFor.has(item.url)) return;
-      setLoadingMetadataFor((prev) => new Set(prev).add(item.url));
+    const fetchGallery = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
-        const metadata = await BirdNestAPI.getFileMetadata(item.url);
-        setItems((prev) =>
-          prev.map((i) =>
-            i.url === item.url
-              ? {
-                  ...i,
-                  s3_url: metadata.s3_url,
-                  thumbnail_s3_url: metadata.thumbnail_s3_url,
-                  file_type: metadata.file_type,
-                  tags: metadata.tags || {},
-                  metadataLoaded: true,
-                }
-              : i
-          )
-        );
-      } catch {
-        // Silently fail metadata load for individual items
+        const data = await BirdNestAPI.getGallery();
+        const items: GalleryItem[] = data.map((m) => ({
+          url: m.s3_url,
+          s3_url: m.s3_url,
+          thumbnail_s3_url: m.thumbnail_s3_url,
+          file_type: m.file_type,
+          tags: m.tags || {},
+          metadataLoaded: true,
+        }));
+        setGalleryItems(items);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load gallery");
       } finally {
-        setLoadingMetadataFor((prev) => {
-          const next = new Set(prev);
-          next.delete(item.url);
-          return next;
-        });
+        setIsLoading(false);
       }
     };
-    items.forEach((item) => {
-      if (!item.metadataLoaded) loadMeta(item);
-    });
-  }, [items, loadingMetadataFor]);
+    fetchGallery();
+  }, []);
 
-  // Species search
-  const handleSearch = async () => {
-    if (!searchSpecies.trim()) return;
-    setIsSearching(true);
-    setError(null);
-    setImageSearchResult(null);
-    try {
-      const speciesList = searchSpecies
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
+  // Local filter: match search term against stringified tags
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) return galleryItems;
+    const term = searchTerm.toLowerCase();
+    return galleryItems.filter(
+      (item) =>
+        JSON.stringify(item.tags).toLowerCase().includes(term) ||
+        extractName(item.url).toLowerCase().includes(term)
+    );
+  }, [galleryItems, searchTerm]);
 
-      const tags: Record<string, number> = {};
-      const count = parseInt(minCount) || 1;
-      for (const s of speciesList) tags[s] = count;
-
-      const result = await BirdNestAPI.searchByTags(tags);
-      const galleryItems: GalleryItem[] = (result.links || []).map((url) => ({
-        url,
-        tags: {},
-        metadataLoaded: false,
-      }));
-      setItems(galleryItems);
-      setHasSearched(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed");
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // Image upload search
+  // Image upload -> poll -> prepend
   const handleImageSelect = useCallback((file: File) => {
     setSearchImageFile(file);
     setSearchImagePreview(URL.createObjectURL(file));
@@ -150,10 +111,18 @@ export default function GalleryPage() {
       }
       const metadata = await BirdNestAPI.pollForResults(uploadResult.s3_url);
       setImageSearchResult(metadata);
+      // Prepend the new item to the gallery
+      const newItem: GalleryItem = {
+        url: metadata.s3_url,
+        s3_url: metadata.s3_url,
+        thumbnail_s3_url: metadata.thumbnail_s3_url,
+        file_type: metadata.file_type,
+        tags: metadata.tags || {},
+        metadataLoaded: true,
+      };
+      setGalleryItems((prev) => [newItem, ...prev]);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Image search failed"
-      );
+      setError(err instanceof Error ? err.message : "Image search failed");
     } finally {
       setIsUploadingImage(false);
     }
@@ -164,7 +133,7 @@ export default function GalleryPage() {
     setDeletingUrl(item.url);
     try {
       await BirdNestAPI.deleteFiles([item.url]);
-      setItems((prev) => prev.filter((i) => i.url !== item.url));
+      setGalleryItems((prev) => prev.filter((i) => i.url !== item.url));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -173,50 +142,26 @@ export default function GalleryPage() {
   };
 
   // Tag modal
-  const openTagModal = async (item: GalleryItem) => {
-    setIsLoadingTags(true);
+  const openTagModal = (item: GalleryItem) => {
     setSelectedItem(item);
+    setTagModalOpen(true);
+  };
+
+  const handleTagsSaved = async () => {
+    // Re-fetch gallery to get updated tags
     try {
-      if (!item.metadataLoaded) {
-        const metadata = await BirdNestAPI.getFileMetadata(item.url);
-        const updated: GalleryItem = {
-          ...item,
-          s3_url: metadata.s3_url,
-          thumbnail_s3_url: metadata.thumbnail_s3_url,
-          file_type: metadata.file_type,
-          tags: metadata.tags || {},
-          metadataLoaded: true,
-        };
-        setItems((prev) =>
-          prev.map((i) => (i.url === item.url ? updated : i))
-        );
-        setSelectedItem(updated);
-      }
-      setTagModalOpen(true);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load file metadata"
-      );
-    } finally {
-      setIsLoadingTags(false);
-    }
-  };
-
-  const handleTagsSaved = () => {
-    if (searchSpecies.trim()) handleSearch();
-  };
-
-  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSearch();
-  };
-
-  const extractName = (url: string) => {
-    try {
-      const parts = url.split("/");
-      const filename = parts[parts.length - 1];
-      return decodeURIComponent(filename).replace(/[-_]/g, " ").split(".")[0];
+      const data = await BirdNestAPI.getGallery();
+      const items: GalleryItem[] = data.map((m) => ({
+        url: m.s3_url,
+        s3_url: m.s3_url,
+        thumbnail_s3_url: m.thumbnail_s3_url,
+        file_type: m.file_type,
+        tags: m.tags || {},
+        metadataLoaded: true,
+      }));
+      setGalleryItems(items);
     } catch {
-      return "Media file";
+      // Silently fail refresh
     }
   };
 
@@ -226,50 +171,23 @@ export default function GalleryPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-text-primary">Gallery</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Browse your bird collection by species or search by image
+            Browse your bird collection or search by image
           </p>
         </div>
 
         {/* Search bar */}
         <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-bg-surface/60 transition-all duration-300">
-          {/* Top row: species + count + search button + image toggle */}
           <div className="flex items-center gap-3 p-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
               <input
                 type="text"
-                value={searchSpecies}
-                onChange={(e) => setSearchSpecies(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                placeholder='Search species (e.g. "crow, pigeon")'
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder='Filter by species (e.g. "crow")'
                 className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200 focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30"
               />
             </div>
-            <div className="relative w-24">
-              <Hash className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
-              <input
-                type="number"
-                value={minCount}
-                onChange={(e) => setMinCount(e.target.value)}
-                placeholder="Min"
-                min="1"
-                className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200 focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30"
-              />
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleSearch}
-              disabled={isSearching || !searchSpecies.trim()}
-              className="flex items-center gap-2 rounded-lg bg-accent-gold px-5 py-2.5 text-sm font-semibold text-bg-deep transition-colors hover:bg-accent-gold-light disabled:opacity-40"
-            >
-              {isSearching ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-              Search
-            </motion.button>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -279,6 +197,7 @@ export default function GalleryPage() {
                   ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold"
                   : "border-border bg-bg-deep text-text-tertiary hover:border-border-light hover:text-text-secondary"
               }`}
+              title="Search by image"
             >
               <Camera className="h-4 w-4" />
             </motion.button>
@@ -346,7 +265,6 @@ export default function GalleryPage() {
                           )}
                         </motion.button>
 
-                        {/* Image search result inline */}
                         {imageSearchResult && imageSearchResult.tags && (
                           <div className="mt-3 space-y-1.5">
                             <p className="text-xs font-medium text-accent-emerald">
@@ -429,7 +347,14 @@ export default function GalleryPage() {
         )}
 
         {/* Gallery content */}
-        {!hasSearched ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Loader2 className="mb-4 h-8 w-8 animate-spin text-accent-gold" />
+            <p className="text-sm font-medium text-text-secondary">
+              Loading your gallery...
+            </p>
+          </div>
+        ) : galleryItems.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -439,13 +364,14 @@ export default function GalleryPage() {
               <ImageIcon className="h-7 w-7 text-text-tertiary" />
             </div>
             <p className="text-sm font-medium text-text-secondary">
-              Search for species to view your gallery
+              Your gallery is empty
             </p>
             <p className="mt-1 text-xs text-text-tertiary">
-              Type a species name above or upload an image to identify birds
+              Upload images from the Upload page or use the camera icon above to
+              identify a bird
             </p>
           </motion.div>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -455,23 +381,27 @@ export default function GalleryPage() {
               <Bird className="h-7 w-7 text-text-tertiary" />
             </div>
             <p className="text-sm font-medium text-text-secondary">
-              No results found
+              No matches for &ldquo;{searchTerm}&rdquo;
             </p>
             <p className="mt-1 text-xs text-text-tertiary">
-              Try a different species name or lower minimum count
+              Try a different species name
             </p>
           </motion.div>
         ) : (
           <>
             <p className="mb-4 text-sm text-text-secondary">
-              {items.length} result{items.length !== 1 ? "s" : ""} found
+              {filteredItems.length} of {galleryItems.length} item
+              {galleryItems.length !== 1 ? "s" : ""}
+              {searchTerm.trim() ? ` matching "${searchTerm}"` : ""}
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
               <AnimatePresence mode="popLayout">
-                {items.map((item) => (
+                {filteredItems.map((item) => (
                   <motion.div
                     key={item.url}
                     layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                     className="group relative overflow-hidden rounded-xl border border-border bg-bg-surface/60 transition-all duration-300 hover:border-border-light hover:shadow-lg hover:shadow-black/20"
                   >
@@ -491,15 +421,9 @@ export default function GalleryPage() {
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
                           onClick={() => openTagModal(item)}
-                          disabled={isLoadingTags}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white backdrop-blur-sm transition-colors hover:bg-accent-gold/30 hover:text-accent-gold disabled:opacity-50"
+                          className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white backdrop-blur-sm transition-colors hover:bg-accent-gold/30 hover:text-accent-gold"
                         >
-                          {isLoadingTags &&
-                          selectedItem?.url === item.url ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Tag className="h-4 w-4" />
-                          )}
+                          <Tag className="h-4 w-4" />
                         </motion.button>
                         <motion.button
                           whileHover={{ scale: 1.1 }}
@@ -530,32 +454,25 @@ export default function GalleryPage() {
                       <h3 className="truncate text-sm font-semibold text-text-primary">
                         {extractName(item.url)}
                       </h3>
-                      {item.metadataLoaded ? (
-                        Object.keys(item.tags).length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {Object.entries(item.tags).map(
-                              ([species, count]) => (
-                                <span
-                                  key={species}
-                                  className="flex items-center gap-1 rounded-full bg-accent-emerald/10 px-2 py-0.5 text-[10px] font-medium text-accent-emerald/80"
-                                >
-                                  <Bird className="h-2.5 w-2.5" />
-                                  <span className="capitalize">{species}</span>
-                                  <span className="opacity-60">({count})</span>
-                                </span>
-                              )
-                            )}
-                          </div>
-                        ) : (
-                          <p className="mt-1.5 text-[10px] text-text-tertiary">
-                            No species tagged
-                          </p>
-                        )
-                      ) : (
-                        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-text-tertiary">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Loading details...
+                      {Object.keys(item.tags).length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {Object.entries(item.tags).map(
+                            ([species, count]) => (
+                              <span
+                                key={species}
+                                className="flex items-center gap-1 rounded-full bg-accent-emerald/10 px-2 py-0.5 text-[10px] font-medium text-accent-emerald/80"
+                              >
+                                <Bird className="h-2.5 w-2.5" />
+                                <span className="capitalize">{species}</span>
+                                <span className="opacity-60">({count})</span>
+                              </span>
+                            )
+                          )}
                         </div>
+                      ) : (
+                        <p className="mt-1.5 text-[10px] text-text-tertiary">
+                          No species tagged
+                        </p>
                       )}
                     </div>
                   </motion.div>
@@ -579,4 +496,14 @@ export default function GalleryPage() {
       </div>
     </PageTransition>
   );
+}
+
+function extractName(url: string) {
+  try {
+    const parts = url.split("/");
+    const filename = parts[parts.length - 1];
+    return decodeURIComponent(filename).replace(/[-_]/g, " ").split(".")[0];
+  } catch {
+    return "Media file";
+  }
 }
