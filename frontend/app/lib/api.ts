@@ -176,27 +176,26 @@ export const BirdNestAPI = {
   // src/app/lib/api.ts
 
   searchByFile: async (s3Url: string): Promise<FileMetadata> => {
-    // NORMALIZATION: Strip region codes and rebuild the URL to match the Lambda's format
-    const url = new URL(s3Url);
-    const bucketName = "birdnest-app-storage"; 
-    const normalizedUrl = `https://${bucketName}.s3.amazonaws.com${url.pathname}`;
+  // 1. Normalize the URL
+  const url = new URL(s3Url);
+  const bucketName = "birdnest-app-storage"; 
+  const normalizedUrl = `https://${bucketName}.s3.amazonaws.com${url.pathname}`;
 
-    console.log("🔍 UI Searching for:", normalizedUrl);
+  console.log("🔍 UI Searching for:", normalizedUrl);
 
-    const res = await fetch(`${API_URL}/search/file?t=${Date.now()}`, { // Add timestamp to force new request
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache, no-store, must-revalidate", // Tell browser: "Don't save this!"
-        "Pragma": "no-cache",
-        "Expires": "0"
-      },
-      cache: "no-store", // Native fetch cache disable
-      body: JSON.stringify({ s3_url: normalizedUrl }), 
-    });
-    
-    if (!res.ok) throw new Error("Search failed");
-    return res.json();
+  // 2. Add Timestamp to Query Param (The "Cache Buster")
+  // We REMOVED the 'Cache-Control' headers to fix the CORS error.
+  const res = await fetch(`${API_URL}/search/file?t=${Date.now()}`, {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json" 
+      // NO Cache-Control headers here!
+    },
+    body: JSON.stringify({ s3_url: normalizedUrl }), 
+  });
+  
+  if (!res.ok) throw new Error("Search failed");
+  return res.json();
   },
 
   pollForResults: async (s3Url: string, attempts = 40): Promise<FileMetadata> => {
