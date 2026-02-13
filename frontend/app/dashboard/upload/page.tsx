@@ -209,7 +209,7 @@ export default function UploadPage() {
           id: detId,
           fileName: pf.file.name,
           fileType: getFileType(pf.file),
-          s3Url,
+          s3Url: s3Url,
           preview: s3Url,
           status: "processing",
           startTime: Date.now(),
@@ -561,23 +561,32 @@ export default function UploadPage() {
                           </div>
                         </div>
                       ) : (
-                        /* ── Success state ── */
+                       /* ── Success state ── */
                         <div className="p-5">
                           <div className="flex flex-col gap-5 sm:flex-row">
-                            {/* Image / Thumbnail */}
                             <div className="shrink-0">
+                              {/* 1. If we have a dedicated thumbnail (Best for videos) */}
                               {activeDet.thumbnailUrl ? (
                                 <img
-                                  src={activeDet.thumbnailUrl} // FIX: Use the thumbnail URL, not s3Url (which might be a video)
+                                  src={activeDet.thumbnailUrl}
                                   alt={activeDet.fileName}
                                   className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
                                 />
-                              ) : activeDet.s3Url || activeDet.preview ? (
+                              /* 2. If it is a VIDEO, use a video tag */
+                              ) : activeDet.fileType === 'video' && activeDet.preview ? (
+                                <video
+                                  src={activeDet.preview}
+                                  className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
+                                  controls
+                                />
+                              /* 3. If it is an IMAGE, use the img tag */
+                              ) : activeDet.preview ? (
                                 <img
-                                  src={activeDet.s3Url || activeDet.preview} // FIX: Use the property from activeDet
+                                  src={activeDet.preview}
                                   alt={activeDet.fileName}
                                   className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
                                 />
+                              /* 4. Fallback */
                               ) : (
                                 <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-border bg-bg-deep">
                                   <Video className="h-10 w-10 text-text-tertiary" />
