@@ -169,7 +169,17 @@ export default function GalleryPage() {
 
   return (
     <PageTransition>
-      <div>
+      {/* Back to Dashboard */}
+      <Link href="/dashboard">
+        <motion.div
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.95 }}
+          className="mb-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-bg-surface/60 text-text-secondary transition-colors hover:border-accent-gold/40 hover:text-accent-gold"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </motion.div>
+      </Link>
+      <div className="mx-auto max-w-5xl">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-text-primary">Gallery</h1>
           <p className="mt-1 text-sm text-text-secondary">
@@ -495,19 +505,6 @@ export default function GalleryPage() {
             onSaved={handleTagsSaved}
           />
         )}
-      </div>
-      {/* Back to Dashboard */}
-      <div className="mt-10 flex justify-center">
-        <Link href="/dashboard">
-          <motion.div
-            whileHover={{ x: -4 }}
-            whileTap={{ scale: 0.97 }}
-            className="flex items-center gap-2 text-sm font-medium text-text-secondary transition-colors hover:text-accent-gold"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
-          </motion.div>
-        </Link>
       </div>
     </PageTransition>
   );
