@@ -597,30 +597,39 @@ export default function UploadPage() {
                       ) : (
                        /* ── Success state ── */
                         <div className="p-5">
+                          {/* DEBUG: Print the exact URL we are trying to render */}
+                          <div className="mb-2 text-[10px] text-red-500 font-mono break-all border border-red-500/30 p-1 bg-red-500/10">
+                            DEBUG SRC: {activeDet.thumbnailUrl || activeDet.preview || "NULL"}
+                          </div>
+
                           <div className="flex flex-col gap-5 sm:flex-row">
                             <div className="shrink-0">
-                              {/* 1. If we have a dedicated thumbnail (Best for videos) */}
+                              {/* 1. Thumbnail (Video processed) */}
                               {activeDet.thumbnailUrl ? (
                                 <img
                                   src={activeDet.thumbnailUrl}
-                                  alt={activeDet.fileName}
+                                  alt="" /* REMOVED FILENAME DEFAULT */
                                   className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
                                 />
-                              /* 2. If it is a VIDEO, use a video tag */
+                              /* 2. Video Preview */
                               ) : activeDet.fileType === 'video' && activeDet.preview ? (
                                 <video
                                   src={activeDet.preview}
                                   className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
                                   controls
                                 />
-                              /* 3. If it is an IMAGE, use the img tag */
+                              /* 3. Image Preview (The one failing) */
                               ) : activeDet.preview ? (
                                 <img
                                   src={activeDet.preview}
-                                  alt={activeDet.fileName}
-                                  className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
+                                  alt="" /* REMOVED FILENAME DEFAULT - Now shows broken icon only */
+                                  className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48 bg-gray-800"
+                                  onError={(e) => {
+                                    console.error("❌ Image Load Error for:", activeDet.preview);
+                                    e.currentTarget.style.border = "2px solid red"; // Highlight broken images
+                                  }}
                                 />
-                              /* 4. Fallback */
+                              /* 4. Fallback Placeholder */
                               ) : (
                                 <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-border bg-bg-deep">
                                   <Video className="h-10 w-10 text-text-tertiary" />
