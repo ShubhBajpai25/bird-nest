@@ -110,28 +110,45 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  // 4. Update Tags
+  // src/app/lib/api.ts (Snippet for updateTags)
+
   updateTags: async (
     urls: string[],
     operation: 0 | 1,
-    tags: string[] | Record<string, number> // Allow both formats for safety
+    tags: string[] | Record<string, number> // <--- Accepts BOTH formats
   ): Promise<TagUpdateResponse> => {
     
-    // SAFETY FIX: Convert Object to Array if the UI passed a Record
     let formattedTags: string[] = [];
+
+    // Scenario A: UI sent ["crow,1", "magpie,2"] -> Pass it through
     if (Array.isArray(tags)) {
       formattedTags = tags;
-    } else {
-      // Convert { crow: 1 } -> ["crow,1"]
-      formattedTags = Object.entries(tags).map(([k, v]) => `${k},${v}`);
+    } 
+    // Scenario B: UI sent {"crow": 1, "magpie": 2} -> Convert it
+    else {
+      formattedTags = Object.entries(tags).map(([species, count]) => {
+        return `${species},${count}`;
+      });
     }
+
+    // Debug: Log what we are actually sending to AWS
+    console.log("Sending to Lambda:", { urls, operation, tags: formattedTags });
 
     const res = await fetch(`${API_URL}/tags`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls, operation, tags: formattedTags }),
+      body: JSON.stringify({ 
+        urls, 
+        operation, 
+        tags: formattedTags // <--- Guaranteed to be ["string,1"]
+      }),
     });
-    if (!res.ok) throw new Error("Tag update failed");
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Tag update failed: ${errorText}`);
+    }
+    
     return res.json();
   },
 
