@@ -18,6 +18,7 @@ import {
   Clock,
   Sparkles,
   ArrowLeft,
+  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import PageTransition from "@/app/components/PageTransition";
@@ -47,6 +48,8 @@ interface DetectionResult {
   startTime: number;
   elapsedMs: number;
   error?: string;
+  funFact?: string;
+  funFactLoading?: boolean;
 }
 
 const typeConfig = {
@@ -144,20 +147,60 @@ export default function UploadPage() {
         try {
           const result: FileMetadata = await BirdNestAPI.pollForResults(s3Url);
           const endTime = Date.now();
+          const tags = result.tags || {};
           setDetections((prev) =>
             prev.map((d) =>
               d.id === detectionId
                 ? {
                     ...d,
                     status: "done" as const,
-                    tags: result.tags || {},
-                    // ⬇️ LOGIC CHANGE: Ignored the thumbnail URL from API
-                    thumbnailUrl: undefined, 
+                    tags,
+                    thumbnailUrl: undefined,
                     elapsedMs: endTime - d.startTime,
+                    funFactLoading: Object.keys(tags).length > 0,
                   }
                 : d
             )
           );
+
+          // Fetch fun fact for the top detected species
+          const speciesList = Object.keys(tags);
+          if (speciesList.length > 0) {
+            const topSpecies = speciesList[0];
+            try {
+              const res = await fetch("/api/funfact", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ species: topSpecies }),
+              });
+              if (res.ok) {
+                const data = await res.json();
+                setDetections((prev) =>
+                  prev.map((d) =>
+                    d.id === detectionId
+                      ? { ...d, funFact: data.funFact, funFactLoading: false }
+                      : d
+                  )
+                );
+              } else {
+                setDetections((prev) =>
+                  prev.map((d) =>
+                    d.id === detectionId
+                      ? { ...d, funFactLoading: false }
+                      : d
+                  )
+                );
+              }
+            } catch {
+              setDetections((prev) =>
+                prev.map((d) =>
+                  d.id === detectionId
+                    ? { ...d, funFactLoading: false }
+                    : d
+                )
+              );
+            }
+          }
         } catch (err) {
           const endTime = Date.now();
           setDetections((prev) =>
@@ -668,6 +711,35 @@ export default function UploadPage() {
                               )}
                             </div>
                           </div>
+
+                          {/* Fun Fact */}
+                          {(activeDet.funFactLoading || activeDet.funFact) && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.15 }}
+                              className="mt-4 rounded-xl border border-accent-gold/20 bg-accent-gold/5 p-4"
+                            >
+                              <div className="mb-2 flex items-center gap-2">
+                                <Lightbulb className="h-4 w-4 text-accent-gold" />
+                                <span className="text-xs font-semibold uppercase tracking-wider text-accent-gold">
+                                  Fun Fact
+                                </span>
+                              </div>
+                              {activeDet.funFactLoading ? (
+                                <div className="flex items-center gap-2">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-gold/60" />
+                                  <span className="text-xs text-text-tertiary">
+                                    Generating a fun fact...
+                                  </span>
+                                </div>
+                              ) : (
+                                <p className="text-sm leading-relaxed text-text-secondary">
+                                  {activeDet.funFact}
+                                </p>
+                              )}
+                            </motion.div>
+                          )}
 
                           {/* Footer: elapsed time */}
                           <div className="mt-4 flex items-center justify-end gap-1.5 border-t border-border pt-3 text-[11px] text-text-tertiary">
