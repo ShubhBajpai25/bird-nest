@@ -134,7 +134,7 @@ export default function SignupPage() {
                       type="text" 
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)} 
-                      placeholder="BirdWatcher99" 
+                      placeholder="ex. BirdEnthusiast69" 
                       className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-3 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
                       required 
                     />
@@ -150,6 +150,7 @@ export default function SignupPage() {
                       type="email" 
                       value={email} 
                       onChange={(e) => setEmail(e.target.value)} 
+                      placeholder="ex. birdenthusiast69@pigeonmail.com" 
                       className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-4 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
                       required 
                     />
