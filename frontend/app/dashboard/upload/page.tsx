@@ -28,7 +28,7 @@ import { BirdNestAPI, S3_BUCKET_URL, type FileMetadata } from "@/app/lib/api";
 interface UploadFile {
   id: string;
   file: File;
-  type: "image" | "audio" | "video";
+  type: "image" | "video";
   status: "pending" | "uploading" | "done" | "error";
   s3Key?: string;
   error?: string;
@@ -38,7 +38,7 @@ interface UploadFile {
 interface DetectionResult {
   id: string;
   fileName: string;
-  fileType: "image" | "audio" | "video";
+  fileType: "image" | "video";
   s3Url: string;
   preview?: string;
   status: "processing" | "done" | "error";
@@ -51,13 +51,11 @@ interface DetectionResult {
 
 const typeConfig = {
   image: { icon: ImageIcon, color: "text-blue-400", bg: "bg-blue-500/10" },
-  audio: { icon: Music, color: "text-purple-400", bg: "bg-purple-500/10" },
   video: { icon: Video, color: "text-amber-400", bg: "bg-amber-500/10" },
 };
 
-function getFileType(file: File): "image" | "audio" | "video" {
+function getFileType(file: File): "image" | "video" {
   if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("audio/")) return "audio";
   return "video";
 }
 
@@ -290,8 +288,7 @@ export default function UploadPage() {
             Upload Media
           </h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Drop your bird images, audio recordings, or video clips for AI
-            detection
+            Drop your bird images or video clips for model detection!
           </p>
         </div>
 
@@ -325,7 +322,7 @@ export default function UploadPage() {
             {isDragging ? "Release to upload" : "Drag & drop files here"}
           </p>
           <p className="mb-4 text-sm text-text-tertiary">
-            Images, audio, and video files supported
+            Images and video files supported
           </p>
           <label className="cursor-pointer">
             <motion.span
@@ -339,7 +336,7 @@ export default function UploadPage() {
             <input
               type="file"
               multiple
-              accept="image/*,audio/*,video/*"
+              accept="image/*,video/*"
               onChange={(e) => e.target.files && handleFiles(e.target.files)}
               className="hidden"
             />
@@ -349,7 +346,6 @@ export default function UploadPage() {
           <div className="mt-6 flex gap-3">
             {[
               { icon: ImageIcon, label: "Images", color: "text-blue-400/60" },
-              { icon: Music, label: "Audio", color: "text-purple-400/60" },
               { icon: Video, label: "Video", color: "text-amber-400/60" },
             ].map(({ icon: Icon, label, color }) => (
               <span

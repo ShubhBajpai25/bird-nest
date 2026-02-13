@@ -46,7 +46,7 @@ export default function DashboardPage() {
               <h2 className="mb-3 text-xl font-bold text-text-primary">
                 Scan a Photo/Video!
               </h2>
-              <p className="mb-6 max-w-xs text-sm leading-relaxed text-text-secondary">
+              <p className="mb-6 max-w-sm text-sm leading-relaxed text-text-secondary">
                 Scan a recent sighting to know which bird it is and receive a fun fact about the bird!
               </p>
               <div className="mt-auto flex items-center gap-1.5 text-sm font-medium text-accent-gold transition-transform group-hover:translate-x-1">
