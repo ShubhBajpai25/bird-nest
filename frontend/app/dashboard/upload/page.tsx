@@ -41,7 +41,7 @@ interface DetectionResult {
   preview?: string;
   status: "processing" | "done" | "error";
   tags?: Record<string, number>;
-  thumbnailUrl?: string;
+  thumbnailUrl?: string; // We keep the type definition to avoid errors, but we won't use it
   startTime: number;
   elapsedMs: number;
   error?: string;
@@ -151,7 +151,8 @@ export default function UploadPage() {
                     ...d,
                     status: "done" as const,
                     tags: result.tags || {},
-                    thumbnailUrl: result.thumbnail_s3_url,
+                    // ⬇️ LOGIC CHANGE: Ignored the thumbnail URL from API
+                    thumbnailUrl: undefined, 
                     elapsedMs: endTime - d.startTime,
                   }
                 : d
@@ -183,7 +184,7 @@ export default function UploadPage() {
   // ── Upload + poll ──────────────────────────────────
 
   const uploadAll = async () => {
-    console.log("🚀 UploadAll started..."); // Debug Log 1
+    console.log("🚀 UploadAll started...");
 
     const pending = files.filter((f) => f.status === "pending");
     if (pending.length === 0) {
@@ -191,7 +192,6 @@ export default function UploadPage() {
         return;
     }
 
-    // Update UI to 'uploading'
     setFiles((prev) =>
       prev.map((f) =>
         f.status === "pending" ? { ...f, status: "uploading" as const } : f
@@ -199,15 +199,13 @@ export default function UploadPage() {
     );
 
     for (const pf of pending) {
-      console.log(`📤 Uploading file: ${pf.file.name}`); // Debug Log 2
+      console.log(`📤 Uploading file: ${pf.file.name} (Type: ${pf.file.type})`);
       
       try {
-          // --- THE DANGER ZONE ---
           const result = await BirdNestAPI.uploadFile(pf.file);
-          console.log("✅ API Response:", result); // Debug Log 3
+          console.log("✅ API Response:", result);
 
           if (result.success && result.s3_url) {
-            // SUCCESS LOGIC
             setFiles((prev) =>
               prev.map((f) =>
                 f.id === pf.id
@@ -219,13 +217,12 @@ export default function UploadPage() {
             const s3Url = result.s3_url;
             const detId = pf.id + "-det";
             
-            // Fix: Ensure we use the S3 URL for the preview to avoid 404s
             const newDetection: DetectionResult = {
               id: detId,
               fileName: pf.file.name,
               fileType: getFileType(pf.file),
               s3Url: s3Url,
-              preview: s3Url, // <--- Key Fix from before
+              preview: s3Url, 
               status: "processing",
               startTime: Date.now(),
               elapsedMs: 0,
@@ -236,11 +233,10 @@ export default function UploadPage() {
               return [...prev, newDetection];
             });
             
-            console.log(`📡 Starting polling for: ${s3Url}`); // Debug Log 4
+            console.log(`📡 Starting polling for: ${s3Url}`);
             startPolling(detId, s3Url);
             
           } else {
-            // LOGIC FAILURE (API returned 200, but said success: false)
             console.error("❌ Upload logic failed:", result.error);
             setFiles((prev) =>
               prev.map((f) =>
@@ -252,10 +248,7 @@ export default function UploadPage() {
           }
 
       } catch (error: any) {
-          // --- THE CRASH HANDLER ---
-          // This catches Network Errors, CORS, and 500s that crash fetch
           console.error("🔥 CRITICAL UPLOAD CRASH:", error); 
-          
           setFiles((prev) =>
             prev.map((f) =>
               f.id === pf.id
@@ -339,7 +332,8 @@ export default function UploadPage() {
               className="hidden"
             />
           </label>
-
+           
+           {/* Helper Icons */}
           <div className="mt-6 flex gap-3">
             {[
               { icon: ImageIcon, label: "Images", color: "text-blue-400/60" },
@@ -439,7 +433,8 @@ export default function UploadPage() {
                             </p>
                           )}
                         </div>
-
+                        
+                        {/* Remove/Status Buttons */}
                         {f.status === "done" ? (
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-emerald/10">
                             <Check className="h-4 w-4 text-accent-emerald" />
@@ -505,7 +500,7 @@ export default function UploadPage() {
             ) : (
               /* ── Carousel content ── */
               <div className="relative">
-                {/* Left arrow */}
+                {/* Left/Right Arrows */}
                 {detections.length > 1 && activeIdx > 0 && (
                   <motion.button
                     whileHover={{ scale: 1.1 }}
@@ -516,8 +511,6 @@ export default function UploadPage() {
                     <ChevronLeft className="h-5 w-5" />
                   </motion.button>
                 )}
-
-                {/* Right arrow */}
                 {detections.length > 1 &&
                   activeIdx < detections.length - 1 && (
                     <motion.button
@@ -597,44 +590,34 @@ export default function UploadPage() {
                       ) : (
                        /* ── Success state ── */
                         <div className="p-5">
-                          {/* DEBUG: Print the exact URL we are trying to render */}
-                          <div className="mb-2 text-[10px] text-red-500 font-mono break-all border border-red-500/30 p-1 bg-red-500/10">
-                            DEBUG SRC: {activeDet.thumbnailUrl || activeDet.preview || "NULL"}
-                          </div>
-
                           <div className="flex flex-col gap-5 sm:flex-row">
                             <div className="shrink-0">
-                              {/* 1. Thumbnail (Video processed) */}
-                              {activeDet.thumbnailUrl ? (
-                                <img
-                                  src={activeDet.thumbnailUrl}
-                                  alt="" /* REMOVED FILENAME DEFAULT */
-                                  className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
-                                />
-                              /* 2. Video Preview */
-                              ) : activeDet.fileType === 'video' && activeDet.preview ? (
-                                <video
-                                  src={activeDet.preview}
-                                  className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
-                                  controls
-                                />
-                              /* 3. Image Preview (The one failing) */
-                              ) : activeDet.preview ? (
-                                <img
-                                  src={activeDet.preview}
-                                  alt="" /* REMOVED FILENAME DEFAULT - Now shows broken icon only */
-                                  className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48 bg-gray-800"
-                                  onError={(e) => {
-                                    console.error("❌ Image Load Error for:", activeDet.preview);
-                                    e.currentTarget.style.border = "2px solid red"; // Highlight broken images
-                                  }}
-                                />
-                              /* 4. Fallback Placeholder */
-                              ) : (
-                                <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-border bg-bg-deep">
-                                  <Video className="h-10 w-10 text-text-tertiary" />
-                                </div>
-                              )}
+                                {/* ⬇️ LOGIC CHANGE: Completely prioritized s3Url over thumbnail */}
+                                {/* If it is a VIDEO, use a video tag */}
+                                {activeDet.fileType === 'video' && activeDet.preview ? (
+                                    <video
+                                    src={activeDet.preview}
+                                    className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
+                                    controls
+                                    />
+                                /* If it is an IMAGE, use the S3 URL directly */
+                                ) : activeDet.s3Url || activeDet.preview ? (
+                                    <img
+                                    // FORCE ORIGINAL IMAGE
+                                    src={activeDet.s3Url || activeDet.preview}
+                                    alt="" 
+                                    className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
+                                    onError={(e) => {
+                                        console.error("❌ Image Load Error:", e.currentTarget.src);
+                                        e.currentTarget.style.border = "2px solid red";
+                                    }}
+                                    />
+                                /* Fallback */
+                                ) : (
+                                    <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-border bg-bg-deep">
+                                    <Video className="h-10 w-10 text-text-tertiary" />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Details */}
