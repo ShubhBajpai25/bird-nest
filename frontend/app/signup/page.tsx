@@ -83,7 +83,7 @@ export default function SignupPage() {
       // We'll use username here to be consistent with the signup.
       await signIn({ username: username, password });
       
-      router.push("/dashboard/gallery");
+      router.push("/dashboard");
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Invalid verification code");
