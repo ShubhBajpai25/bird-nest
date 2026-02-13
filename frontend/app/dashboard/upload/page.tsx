@@ -478,7 +478,6 @@ export default function UploadPage() {
           className="mt-8"
         >
           <div className="mb-4 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-accent-gold" />
             <h2 className="text-sm font-semibold text-text-primary">
               Detection Results
             </h2>
@@ -500,7 +499,7 @@ export default function UploadPage() {
                   Detection results will appear here
                 </p>
                 <p className="mt-1 max-w-xs text-center text-xs text-text-tertiary">
-                  Upload your bird images or videos and the AI will
+                  Upload your bird images or videos and the YOLOv5 model will
                   automatically identify species. Results for each upload will be
                   shown in this section.
                 </p>

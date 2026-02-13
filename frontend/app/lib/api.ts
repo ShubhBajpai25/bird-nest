@@ -2,7 +2,7 @@ import { getCurrentUser } from 'aws-amplify/auth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
-// ── Response types ──────────────────────────────────────────────
+// ── Interfaces ──────────────────────────────────────────────────
 
 export interface UploadResult {
   success: boolean;
@@ -36,8 +36,6 @@ export interface TagUpdateResponse {
   message: string;
 }
 
-// ── Gallery item (used by frontend components) ──────────────────
-
 export interface GalleryItem {
   url: string;
   s3_url?: string;
@@ -47,33 +45,30 @@ export interface GalleryItem {
   metadataLoaded: boolean;
 }
 
-// ── API client ──────────────────────────────────────────────────
+// ── API Client ──────────────────────────────────────────────────
 
 export const BirdNestAPI = {
-  /**
-   * New Helper: Get the Real Cognito User ID (sub)
-   */
+  
+  // 1. Get User ID (Safe Wrapper)
   async getUserId(): Promise<string> {
     try {
       const user = await getCurrentUser();
       return user.userId;
     } catch (error) {
-      console.warn("User not logged in:", error);
+      console.warn("User not logged in, defaulting to anonymous");
       return "anonymous-user";
     }
   },
 
-  /**
-   * Upload a file via presigned URL (two-step).
-   * Now includes userId in the metadata and request.
-   */
+  // 2. Upload File (With Metadata Linking)
   uploadFile: async (file: File): Promise<UploadResult> => {
     try {
       const userId = await BirdNestAPI.getUserId();
       const filename = encodeURIComponent(file.name);
       const fileType = encodeURIComponent(file.type);
 
-      // Append userId to the initial URL request
+      // Step A: Get Presigned URL
+      // We pass userId so the backend can SIGN it into the URL
       const res = await fetch(
         `${API_URL}/upload?fileName=${filename}&fileType=${fileType}&userId=${userId}`,
         { method: "POST" }
@@ -82,31 +77,31 @@ export const BirdNestAPI = {
       if (!res.ok) throw new Error("Failed to get upload URL");
       const { uploadUrl, key, s3_url } = await res.json();
 
+      // Step B: Upload to S3
+      // CRITICAL: This header must match what the backend signed!
       const upload = await fetch(uploadUrl, {
         method: "PUT",
         headers: { 
           "Content-Type": file.type,
-          "x-amz-meta-userid": userId // Required for the Detection Lambda to link the file to you
+          "x-amz-meta-userid": userId 
         },
         body: file,
       });
+
       if (!upload.ok) throw new Error("Failed to upload to S3");
 
       return { success: true, key, s3_url };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
       console.error("Upload error:", err);
-      return { success: false, error: msg };
+      return { success: false, error: err instanceof Error ? err.message : "Upload failed" };
     }
   },
 
-  /**
-   * Search by species tags with minimum counts.
-   */
-  searchByTags: async (
-    tags: Record<string, number>
-  ): Promise<TagSearchResponse> => {
-    const res = await fetch(`${API_URL}/search/tags`, {
+  // 3. Search By Tags
+  // Updated Path: Assuming your Search Lambda is on POST /tags
+  searchByTags: async (tags: Record<string, number>): Promise<TagSearchResponse> => {
+    // If your API Gateway path is just /tags for both PUT and POST:
+    const res = await fetch(`${API_URL}/tags`, { 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tags }),
@@ -115,37 +110,32 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  /**
-   * Reverse-lookup: thumbnail URL -> original media file info.
-   */
-  searchByThumbnail: async (
-    thumbnailUrl: string
-  ): Promise<ThumbnailSearchResponse> => {
-    const res = await fetch(`${API_URL}/search/thumbnail`, {
-      method: "POST",
+  // 4. Update Tags
+  updateTags: async (
+    urls: string[],
+    operation: 0 | 1,
+    tags: string[] | Record<string, number> // Allow both formats for safety
+  ): Promise<TagUpdateResponse> => {
+    
+    // SAFETY FIX: Convert Object to Array if the UI passed a Record
+    let formattedTags: string[] = [];
+    if (Array.isArray(tags)) {
+      formattedTags = tags;
+    } else {
+      // Convert { crow: 1 } -> ["crow,1"]
+      formattedTags = Object.entries(tags).map(([k, v]) => `${k},${v}`);
+    }
+
+    const res = await fetch(`${API_URL}/tags`, {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ thumbnail_url: thumbnailUrl }),
+      body: JSON.stringify({ urls, operation, tags: formattedTags }),
     });
-    if (!res.ok) throw new Error("Thumbnail search failed");
+    if (!res.ok) throw new Error("Tag update failed");
     return res.json();
   },
 
-  /**
-   * Get full metadata (tags, file_type, etc.) for a given s3_url.
-   */
-  searchByFile: async (s3Url: string): Promise<FileMetadata> => {
-    const res = await fetch(`${API_URL}/search/file`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ s3_url: s3Url }),
-    });
-    if (!res.ok) throw new Error("File search failed");
-    return res.json();
-  },
-
-  /**
-   * Delete files from S3 and DB.
-   */
+  // 5. Delete Files
   deleteFiles: async (urls: string[]): Promise<DeleteResponse> => {
     const res = await fetch(`${API_URL}/file`, {
       method: "DELETE",
@@ -156,26 +146,7 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  /**
-   * Add or remove tags on one or more files.
-   */
-  updateTags: async (
-    urls: string[],
-    operation: 0 | 1,
-    tags: string[]
-  ): Promise<TagUpdateResponse> => {
-    const res = await fetch(`${API_URL}/tags`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls, operation, tags }),
-    });
-    if (!res.ok) throw new Error("Tag update failed");
-    return res.json();
-  },
-
-  /**
-   * Fetch user-specific gallery items using the Cognito User ID.
-   */
+  // 6. Get Gallery (User Specific)
   getGallery: async (): Promise<FileMetadata[]> => {
     const userId = await BirdNestAPI.getUserId();
     const res = await fetch(`${API_URL}/gallery?userId=${userId}`, {
@@ -186,25 +157,28 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  /**
-   * Helper: resolve any URL (thumbnail or s3) to full file metadata.
-   */
-  getFileMetadata: async (url: string): Promise<FileMetadata> => {
-    let s3Url = url;
-    if (url.includes("thumb")) {
-      const thumbResult = await BirdNestAPI.searchByThumbnail(url);
-      s3Url = thumbResult.s3_url;
-    }
-    return BirdNestAPI.searchByFile(s3Url);
+  // Helpers
+  searchByThumbnail: async (thumbnailUrl: string): Promise<ThumbnailSearchResponse> => {
+    const res = await fetch(`${API_URL}/search/thumbnail`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thumbnail_url: thumbnailUrl }),
+    });
+    if (!res.ok) throw new Error("Thumbnail search failed");
+    return res.json();
   },
 
-  /**
-   * Poll DynamoDB until the AI detection tags appear for a given S3 URL.
-   */
-  pollForResults: async (
-    s3Url: string,
-    attempts = 30
-  ): Promise<FileMetadata> => {
+  searchByFile: async (s3Url: string): Promise<FileMetadata> => {
+    const res = await fetch(`${API_URL}/search/file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ s3_url: s3Url }),
+    });
+    if (!res.ok) throw new Error("File search failed");
+    return res.json();
+  },
+
+  pollForResults: async (s3Url: string, attempts = 30): Promise<FileMetadata> => {
     for (let i = 0; i < attempts; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       try {
@@ -212,9 +186,7 @@ export const BirdNestAPI = {
         if (data && data.tags && Object.keys(data.tags).length > 0) {
           return data;
         }
-      } catch {
-        // Continue polling
-      }
+      } catch { /* ignore */ }
     }
     throw new Error("Timeout: AI took too long to process.");
   },
@@ -222,8 +194,7 @@ export const BirdNestAPI = {
 
 export const S3_BUCKET_URL = "https://birdnest-app-storage.s3.amazonaws.com";
 
-// ── Tag diff helper (used by TagModal) ──────────────────────────
-
+// ── Tag Diff Helper ─────────────────────────────────────────────
 export function computeTagDiff(
   oldTags: Record<string, number>,
   newTags: Record<string, number>
@@ -234,15 +205,15 @@ export function computeTagDiff(
   for (const [species, count] of Object.entries(newTags)) {
     const oldCount = oldTags[species] || 0;
     if (count > oldCount) {
-      additions.push(`${species}, ${count - oldCount}`);
+      additions.push(`${species},${count - oldCount}`); // Fixed space after comma
     } else if (count < oldCount) {
-      removals.push(`${species}, ${oldCount - count}`);
+      removals.push(`${species},${oldCount - count}`);
     }
   }
 
   for (const [species, count] of Object.entries(oldTags)) {
     if (!(species in newTags)) {
-      removals.push(`${species}, ${count}`);
+      removals.push(`${species},${count}`);
     }
   }
 
