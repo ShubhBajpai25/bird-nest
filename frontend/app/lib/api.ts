@@ -183,9 +183,15 @@ export const BirdNestAPI = {
 
     console.log("🔍 UI Searching for:", normalizedUrl);
 
-    const res = await fetch(`${API_URL}/search/file`, {
+    const res = await fetch(`${API_URL}/search/file?t=${Date.now()}`, { // Add timestamp to force new request
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate", // Tell browser: "Don't save this!"
+        "Pragma": "no-cache",
+        "Expires": "0"
+      },
+      cache: "no-store", // Native fetch cache disable
       body: JSON.stringify({ s3_url: normalizedUrl }), 
     });
     
