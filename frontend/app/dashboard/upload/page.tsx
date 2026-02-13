@@ -17,7 +17,9 @@ import {
   Loader2,
   Clock,
   Sparkles,
+  ArrowLeft,
 } from "lucide-react";
+import Link from "next/link";
 import PageTransition from "@/app/components/PageTransition";
 import { BirdNestAPI, S3_BUCKET_URL, type FileMetadata } from "@/app/lib/api";
 
@@ -697,6 +699,19 @@ export default function UploadPage() {
             )}
           </div>
         </motion.div>
+      </div>
+      {/* Back to Dashboard */}
+      <div className="mt-10 flex justify-center">
+        <Link href="/dashboard">
+          <motion.div
+            whileHover={{ x: -4 }}
+            whileTap={{ scale: 0.97 }}
+            className="flex items-center gap-2 text-sm font-medium text-text-secondary transition-colors hover:text-accent-gold"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </motion.div>
+        </Link>
       </div>
     </PageTransition>
   );

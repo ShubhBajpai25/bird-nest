@@ -13,7 +13,9 @@ import {
   Upload,
   X,
   Camera,
+  ArrowLeft,
 } from "lucide-react";
+import Link from "next/link";
 import PageTransition from "@/app/components/PageTransition";
 import TagModal from "@/app/components/TagModal";
 import { BirdNestAPI, type GalleryItem, type FileMetadata } from "@/app/lib/api";
@@ -493,6 +495,19 @@ export default function GalleryPage() {
             onSaved={handleTagsSaved}
           />
         )}
+      </div>
+      {/* Back to Dashboard */}
+      <div className="mt-10 flex justify-center">
+        <Link href="/dashboard">
+          <motion.div
+            whileHover={{ x: -4 }}
+            whileTap={{ scale: 0.97 }}
+            className="flex items-center gap-2 text-sm font-medium text-text-secondary transition-colors hover:text-accent-gold"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </motion.div>
+        </Link>
       </div>
     </PageTransition>
   );
