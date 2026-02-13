@@ -60,15 +60,14 @@ export const BirdNestAPI = {
     }
   },
 
-  // 2. Upload File (With Metadata Linking)
+  // 2. Upload File
   uploadFile: async (file: File): Promise<UploadResult> => {
     try {
       const userId = await BirdNestAPI.getUserId();
       const filename = encodeURIComponent(file.name);
       const fileType = encodeURIComponent(file.type);
 
-      // Step A: Get Presigned URL
-      // We pass userId so the backend can SIGN it into the URL
+      // Path: /upload (Root level)
       const res = await fetch(
         `${API_URL}/upload?fileName=${filename}&fileType=${fileType}&userId=${userId}`,
         { method: "POST" }
@@ -77,8 +76,6 @@ export const BirdNestAPI = {
       if (!res.ok) throw new Error("Failed to get upload URL");
       const { uploadUrl, key, s3_url } = await res.json();
 
-      // Step B: Upload to S3
-      // CRITICAL: This header must match what the backend signed!
       const upload = await fetch(uploadUrl, {
         method: "PUT",
         headers: { 
@@ -92,16 +89,14 @@ export const BirdNestAPI = {
 
       return { success: true, key, s3_url };
     } catch (err) {
-      console.error("Upload error:", err);
       return { success: false, error: err instanceof Error ? err.message : "Upload failed" };
     }
   },
 
   // 3. Search By Tags
-  // Updated Path: Assuming your Search Lambda is on POST /tags
+  // Path: /search/tags (POST)
   searchByTags: async (tags: Record<string, number>): Promise<TagSearchResponse> => {
-    // If your API Gateway path is just /tags for both PUT and POST:
-    const res = await fetch(`${API_URL}/tags`, { 
+    const res = await fetch(`${API_URL}/search/tags`, { 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tags }),
@@ -110,51 +105,39 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  // src/app/lib/api.ts (Snippet for updateTags)
-
+  // 4. Update Tags
+  // Path: /search/tags (PUT) <--- FIXED THIS PATH
   updateTags: async (
     urls: string[],
     operation: 0 | 1,
-    tags: string[] | Record<string, number> // <--- Accepts BOTH formats
+    tags: string[] | Record<string, number>
   ): Promise<TagUpdateResponse> => {
     
+    // Adapter: Handle both Object and Array formats safely
     let formattedTags: string[] = [];
-
-    // Scenario A: UI sent ["crow,1", "magpie,2"] -> Pass it through
     if (Array.isArray(tags)) {
       formattedTags = tags;
-    } 
-    // Scenario B: UI sent {"crow": 1, "magpie": 2} -> Convert it
-    else {
-      formattedTags = Object.entries(tags).map(([species, count]) => {
-        return `${species},${count}`;
-      });
+    } else {
+      formattedTags = Object.entries(tags).map(([k, v]) => `${k},${v}`);
     }
 
-    // Debug: Log what we are actually sending to AWS
-    console.log("Sending to Lambda:", { urls, operation, tags: formattedTags });
-
-    const res = await fetch(`${API_URL}/tags`, {
+    const res = await fetch(`${API_URL}/search/tags`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        urls, 
-        operation, 
-        tags: formattedTags // <--- Guaranteed to be ["string,1"]
-      }),
+      body: JSON.stringify({ urls, operation, tags: formattedTags }),
     });
-
+    
     if (!res.ok) {
       const errorText = await res.text();
       throw new Error(`Tag update failed: ${errorText}`);
     }
-    
     return res.json();
   },
 
   // 5. Delete Files
+  // Path: /search/file (DELETE) <--- FIXED THIS PATH (Nested under /search)
   deleteFiles: async (urls: string[]): Promise<DeleteResponse> => {
-    const res = await fetch(`${API_URL}/file`, {
+    const res = await fetch(`${API_URL}/search/file`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ urls }),
@@ -163,7 +146,8 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  // 6. Get Gallery (User Specific)
+  // 6. Get Gallery
+  // Path: /gallery (Root level)
   getGallery: async (): Promise<FileMetadata[]> => {
     const userId = await BirdNestAPI.getUserId();
     const res = await fetch(`${API_URL}/gallery?userId=${userId}`, {
@@ -175,7 +159,10 @@ export const BirdNestAPI = {
   },
 
   // Helpers
+  // Path: /search/thumbnail (Assuming this exists, if not check Gateway)
   searchByThumbnail: async (thumbnailUrl: string): Promise<ThumbnailSearchResponse> => {
+    // If you don't have a specific /search/thumbnail endpoint, you might need to check your Gateway
+    // But assuming it mirrors the file search:
     const res = await fetch(`${API_URL}/search/thumbnail`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -185,6 +172,7 @@ export const BirdNestAPI = {
     return res.json();
   },
 
+  // Path: /search/file (POST)
   searchByFile: async (s3Url: string): Promise<FileMetadata> => {
     const res = await fetch(`${API_URL}/search/file`, {
       method: "POST",
@@ -222,7 +210,7 @@ export function computeTagDiff(
   for (const [species, count] of Object.entries(newTags)) {
     const oldCount = oldTags[species] || 0;
     if (count > oldCount) {
-      additions.push(`${species},${count - oldCount}`); // Fixed space after comma
+      additions.push(`${species},${count - oldCount}`);
     } else if (count < oldCount) {
       removals.push(`${species},${oldCount - count}`);
     }
