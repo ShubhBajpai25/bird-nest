@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Upload,
   Image as ImageIcon,
-  Search,
   LogOut,
 } from "lucide-react";
 
@@ -16,7 +15,6 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/upload", label: "Upload", icon: Upload },
   { href: "/dashboard/gallery", label: "Gallery", icon: ImageIcon },
-  { href: "/dashboard/search", label: "Search", icon: Search },
 ];
 
 export default function Sidebar() {
