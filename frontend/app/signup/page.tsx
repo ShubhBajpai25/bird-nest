@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bird, Mail, Lock, ArrowRight, Eye, EyeOff, User, Check, Loader2, AlertCircle } from "lucide-react";
-import { signUp, confirmSignUp, signIn, type SignUpOutput } from "aws-amplify/auth";
+import { signUp, confirmSignUp, signIn } from "aws-amplify/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -31,21 +31,19 @@ export default function SignupPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const output = await signUp({
+      await signUp({
         username: email,
         password,
         options: {
           userAttributes: {
             email,
-            given_name: firstName, // Optional: Saves to Cognito
-            family_name: lastName  // Optional: Saves to Cognito
+            given_name: firstName, 
+            family_name: lastName 
           }
         }
       });
-      
       // Move to verification step
       setStep("verify");
-      
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to create account");
@@ -76,7 +74,19 @@ export default function SignupPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-bg-deep nature-bg">
-       {/* ... (Keep your background motion divs) ... */}
+       {/* Background Ambience */}
+      <div className="pointer-events-none absolute inset-0">
+        <motion.div
+          animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.1, 1] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-accent-gold/5 blur-3xl"
+        />
+        <motion.div
+          animate={{ opacity: [0.2, 0.5, 0.2], scale: [1, 1.15, 1] }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+          className="absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-accent-emerald/5 blur-3xl"
+        />
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -84,10 +94,7 @@ export default function SignupPage() {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="relative z-10 w-full max-w-md px-6"
       >
-        <motion.div
-          layout
-          className="mb-8 flex flex-col items-center"
-        >
+        <motion.div layout className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-gold/10 animate-pulse-glow">
             <Bird className="h-8 w-8 text-accent-gold" />
           </div>
@@ -120,7 +127,6 @@ export default function SignupPage() {
                 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
                 onSubmit={handleSignUp}
               >
-                {/* ... (First/Last Name Inputs) ... */}
                  <div className="mb-4 grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-text-secondary">First Name</label>
@@ -162,7 +168,6 @@ export default function SignupPage() {
                 </motion.button>
               </motion.form>
             ) : (
-              // VERIFICATION FORM (Swaps in automatically)
               <motion.form
                 key="verify-form"
                 initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}

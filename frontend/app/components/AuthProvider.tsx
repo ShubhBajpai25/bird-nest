@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { getCurrentUser } from "aws-amplify/auth";
 import { useRouter, usePathname } from "next/navigation";
 
+// Initialize Amplify globally
 Amplify.configure(authConfig);
 
 export default function AuthProvider({
@@ -24,12 +25,12 @@ export default function AuthProvider({
   async function checkUser() {
     try {
       await getCurrentUser();
-      // If logged in and on auth pages, redirect to dashboard
+      // If logged in and trying to access auth pages, redirect to dashboard
       if (pathname === "/login" || pathname === "/signup") {
         router.push("/dashboard/gallery");
       }
     } catch {
-      // If not logged in and trying to access protected pages, redirect to login
+      // If NOT logged in and trying to access protected pages, redirect to login
       if (pathname.startsWith("/dashboard")) {
         router.push("/login");
       }
@@ -38,7 +39,7 @@ export default function AuthProvider({
     }
   }
 
-  // Prevent flashing of protected content
+  // Prevent flashing of protected content before check is complete
   if (!isChecked) return null;
 
   return <>{children}</>;
