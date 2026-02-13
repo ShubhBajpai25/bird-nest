@@ -11,7 +11,7 @@ export default function SignupPage() {
   const router = useRouter();
   
   // Form State
-  const [username, setUsername] = useState(""); // <--- New Username State
+  const [username, setUsername] = useState(""); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   
@@ -29,19 +29,38 @@ export default function SignupPage() {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+
+    // --- VALIDATION CHECKS ---
+    if (username.includes("@")) {
+      setError("Username cannot contain '@' or be an email address.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (username.trim().toLowerCase() === email.trim().toLowerCase()) {
+      setError("Username and Email cannot be the same.");
+      setIsLoading(false);
+      return;
+    }
+    // -------------------------
+
     try {
+      // We pass the explicit 'username' here, NOT the email.
+      // Cognito will link the email via the userAttributes.
       await signUp({
-        username: email, // We use Email as the login ID (per your pool config)
+        username: username, 
         password,
         options: {
           userAttributes: {
-            email,
-            preferred_username: username // We save the actual "Username" here
+            email, 
+            preferred_username: username 
           }
         }
       });
+      
       // Move to verification step
       setStep("verify");
+      
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to create account");
@@ -56,10 +75,13 @@ export default function SignupPage() {
     setIsLoading(true);
     setError(null);
     try {
-      await confirmSignUp({ username: email, confirmationCode: verificationCode });
+      // Verify using the USERNAME (the unique ID we just created)
+      await confirmSignUp({ username: username, confirmationCode: verificationCode });
       
-      // Auto Sign-in after verification
-      await signIn({ username: email, password });
+      // Auto Sign-in. 
+      // Note: Since email is an alias, we can usually sign in with either. 
+      // We'll use username here to be consistent with the signup.
+      await signIn({ username: username, password });
       
       router.push("/dashboard/gallery");
     } catch (err: any) {
@@ -125,7 +147,7 @@ export default function SignupPage() {
                 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
                 onSubmit={handleSignUp}
               >
-                {/* 1. USERNAME INPUT (Replaced First/Last Name) */}
+                {/* 1. USERNAME INPUT */}
                 <div className="mb-4">
                   <label className="mb-1.5 block text-xs font-medium text-text-secondary">Username</label>
                   <div className="relative">
@@ -134,7 +156,7 @@ export default function SignupPage() {
                       type="text" 
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)} 
-                      placeholder="ex. BirdEnthusiast69" 
+                      placeholder="BirdWatcher99" 
                       className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-3 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
                       required 
                     />
@@ -150,7 +172,7 @@ export default function SignupPage() {
                       type="email" 
                       value={email} 
                       onChange={(e) => setEmail(e.target.value)} 
-                      placeholder="ex. birdenthusiast69@pigeonmail.com" 
+                      placeholder="you@example.com"
                       className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-4 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
                       required 
                     />
@@ -166,6 +188,7 @@ export default function SignupPage() {
                       type={showPassword ? "text" : "password"} 
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
+                      placeholder="••••••••"
                       className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-10 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
                       required 
                     />
@@ -180,7 +203,7 @@ export default function SignupPage() {
                 </motion.button>
               </motion.form>
             ) : (
-              // VERIFICATION FORM (Unchanged)
+              // VERIFICATION FORM
               <motion.form
                 key="verify-form"
                 initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
@@ -196,7 +219,7 @@ export default function SignupPage() {
                     className="w-full rounded-lg border border-border bg-bg-deep py-3 px-4 text-center text-xl font-bold tracking-widest text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
                     required 
                   />
-                  <p className="mt-2 text-center text-xs text-text-tertiary">Check your inbox for the 6-digit code.</p>
+                  <p className="mt-2 text-center text-xs text-text-tertiary">Check your email ({email}) for the 6-digit code.</p>
                 </div>
 
                  <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} type="submit" disabled={isLoading} className="group flex w-full items-center justify-center gap-2 rounded-lg bg-accent-gold py-2.5 text-sm font-semibold text-bg-deep transition-all hover:bg-accent-gold-light disabled:opacity-60">
