@@ -47,27 +47,27 @@ def process_s3_file(bucket_name, object_key):
     MODEL_KEY = os.environ.get('MODEL_KEY', 'models/model.pt')
     CONFIDENCE = float(os.environ.get('CONFIDENCE_THRESHOLD', '0.5'))
 
-    # --- 1. ROBUST METADATA EXTRACTION (Keep this one!) ---
     logger.info(f"🔍 INSPECTING METADATA for {object_key}")
-    user_id = 'anonymous-user' # Default
+    user_id = 'anonymous-user' 
     
     try:
         response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
         raw_metadata = response.get('Metadata', {})
-        logger.info(f"RAW METADATA FROM S3: {json.dumps(raw_metadata)}")
         
-        # Search for the ID (Case-insensitive)
-        for key, value in raw_metadata.items():
-            # AWS S3 metadata often comes as 'x-amz-meta-userid' or just 'userid'
-            clean_key = key.lower().replace('x-amz-meta-', '')
+        # DEBUG: This will show you exactly what keys are present in CloudWatch
+        logger.info(f"RAW METADATA KEYS FOUND: {list(raw_metadata.keys())}")
+        
+        # Standardize: Find the value regardless of 'x-amz-meta-' prefix or casing
+        for k, v in raw_metadata.items():
+            # S3 often returns 'userid' or 'x-amz-meta-userid'
+            clean_key = k.lower().replace('x-amz-meta-', '')
             if clean_key == 'userid':
-                user_id = value
+                user_id = v
+                logger.info(f"🎯 MATCH FOUND! User ID is: {user_id}")
                 break
-        
-        logger.info(f"✅ FINAL RESOLVED USER ID: {user_id}")
-
+            
     except Exception as e:
-        logger.error(f"❌ FAILED TO GET METADATA: {str(e)}")
+        logger.error(f"❌ METADATA EXTRACTION FAILED: {str(e)}")
     
     # 2. OPTIMIZATION: Check /tmp cache first for the model
     model_path = '/tmp/model.pt'

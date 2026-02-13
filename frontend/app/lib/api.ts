@@ -184,16 +184,29 @@ export const BirdNestAPI = {
   },
 
   pollForResults: async (s3Url: string, attempts = 30): Promise<FileMetadata> => {
+    // Give the Lambda a 2-second head start before the first poll
+    await new Promise((r) => setTimeout(r, 2000));
+
     for (let i = 0; i < attempts; i++) {
-      await new Promise((r) => setTimeout(r, 1000));
       try {
+        console.log(`Polling attempt ${i + 1}/${attempts} for: ${s3Url}`);
         const data = await BirdNestAPI.searchByFile(s3Url);
+        
+        // Success condition: the record exists AND has tags
         if (data && data.tags && Object.keys(data.tags).length > 0) {
+          console.log("🎯 AI Results found!");
           return data;
         }
-      } catch { /* ignore */ }
+      } catch (err) {
+        // If searchByFile returns 404/500 because the record isn't in DB yet, 
+        // we just log it and keep waiting.
+        console.warn("Record not ready yet...");
+      }
+      
+      // Wait 1.5 seconds between each poll
+      await new Promise((r) => setTimeout(r, 1500));
     }
-    throw new Error("Timeout: AI took too long to process.");
+    throw new Error("Timeout: AI took too long to process. Please refresh the gallery in a moment.");
   },
 };
 
