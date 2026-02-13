@@ -165,3 +165,36 @@ export default function SignupPage() {
               // VERIFICATION FORM (Swaps in automatically)
               <motion.form
                 key="verify-form"
+                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+                onSubmit={handleVerify}
+              >
+                <div className="mb-6">
+                  <label className="mb-1.5 block text-xs font-medium text-text-secondary">Verification Code</label>
+                  <input 
+                    type="text" 
+                    value={verificationCode} 
+                    onChange={(e) => setVerificationCode(e.target.value)} 
+                    placeholder="123456" 
+                    className="w-full rounded-lg border border-border bg-bg-deep py-3 px-4 text-center text-xl font-bold tracking-widest text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
+                    required 
+                  />
+                  <p className="mt-2 text-center text-xs text-text-tertiary">Check your inbox for the 6-digit code.</p>
+                </div>
+
+                 <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} type="submit" disabled={isLoading} className="group flex w-full items-center justify-center gap-2 rounded-lg bg-accent-gold py-2.5 text-sm font-semibold text-bg-deep transition-all hover:bg-accent-gold-light disabled:opacity-60">
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Verify & Sign In <Check className="h-4 w-4" /></>}
+                </motion.button>
+              </motion.form>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        {step === "signup" && (
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 text-center text-sm text-text-secondary">
+            Already have an account? <Link href="/login" className="font-medium text-accent-gold transition-colors hover:text-accent-gold-light">Sign in</Link>
+          </motion.p>
+        )}
+      </motion.div>
+    </div>
+  );
+}
