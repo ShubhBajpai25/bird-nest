@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2,
@@ -10,15 +10,12 @@ import {
   Loader2,
   Image as ImageIcon,
   AlertCircle,
-  Upload,
-  X,
-  Camera,
   ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
 import PageTransition from "@/app/components/PageTransition";
 import TagModal from "@/app/components/TagModal";
-import { BirdNestAPI, type GalleryItem, type FileMetadata } from "@/app/lib/api";
+import { BirdNestAPI, type GalleryItem } from "@/app/lib/api";
 
 export default function GalleryPage() {
   // Full gallery fetched from backend
@@ -28,14 +25,6 @@ export default function GalleryPage() {
 
   // Local search filter
   const [searchTerm, setSearchTerm] = useState("");
-
-  // Image search state
-  const [imageSearchOpen, setImageSearchOpen] = useState(false);
-  const [searchImageFile, setSearchImageFile] = useState<File | null>(null);
-  const [searchImagePreview, setSearchImagePreview] = useState<string | null>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [imageSearchResult, setImageSearchResult] = useState<FileMetadata | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
 
   // Tag modal state
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null);
@@ -77,58 +66,6 @@ export default function GalleryPage() {
         extractName(item.url).toLowerCase().includes(term)
     );
   }, [galleryItems, searchTerm]);
-
-  // Image upload -> poll -> prepend
-  const handleImageSelect = useCallback((file: File) => {
-    setSearchImageFile(file);
-    setSearchImagePreview(URL.createObjectURL(file));
-    setImageSearchResult(null);
-  }, []);
-
-  const handleImageDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith("image/")) handleImageSelect(file);
-    },
-    [handleImageSelect]
-  );
-
-  const clearImageSearch = () => {
-    setSearchImageFile(null);
-    setSearchImagePreview(null);
-    setImageSearchResult(null);
-  };
-
-  const handleImageSearch = async () => {
-    if (!searchImageFile) return;
-    setIsUploadingImage(true);
-    setError(null);
-    setImageSearchResult(null);
-    try {
-      const uploadResult = await BirdNestAPI.uploadFile(searchImageFile);
-      if (!uploadResult.success || !uploadResult.s3_url) {
-        throw new Error(uploadResult.error || "Upload failed");
-      }
-      const metadata = await BirdNestAPI.pollForResults(uploadResult.s3_url);
-      setImageSearchResult(metadata);
-      // Prepend the new item to the gallery
-      const newItem: GalleryItem = {
-        url: metadata.s3_url,
-        s3_url: metadata.s3_url,
-        thumbnail_s3_url: metadata.thumbnail_s3_url,
-        file_type: metadata.file_type,
-        tags: metadata.tags || {},
-        metadataLoaded: true,
-      };
-      setGalleryItems((prev) => [newItem, ...prev]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Image search failed");
-    } finally {
-      setIsUploadingImage(false);
-    }
-  };
 
   // Delete
   const handleDelete = async (item: GalleryItem) => {
@@ -183,14 +120,14 @@ export default function GalleryPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-text-primary">Gallery</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Browse your bird collection or search by image
+            Browse your bird collection
           </p>
         </div>
 
         {/* Search bar */}
         <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-bg-surface/60 transition-all duration-300">
-          <div className="flex items-center gap-3 p-4">
-            <div className="relative flex-1">
+          <div className="p-4">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
               <input
                 type="text"
@@ -200,144 +137,7 @@ export default function GalleryPage() {
                 className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200 focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30"
               />
             </div>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setImageSearchOpen((v) => !v)}
-              className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-all duration-200 ${
-                imageSearchOpen
-                  ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold"
-                  : "border-border bg-bg-deep text-text-tertiary hover:border-border-light hover:text-text-secondary"
-              }`}
-              title="Search by image"
-            >
-              <Camera className="h-4 w-4" />
-            </motion.button>
           </div>
-
-          {/* Expandable image search area */}
-          <AnimatePresence>
-            {imageSearchOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden"
-              >
-                <div className="border-t border-border px-4 pb-4 pt-3">
-                  <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-text-secondary">
-                    <Camera className="h-3.5 w-3.5" />
-                    Search by Image
-                  </div>
-
-                  {searchImagePreview ? (
-                    <div className="flex items-start gap-4">
-                      <div className="relative shrink-0 overflow-hidden rounded-lg">
-                        <img
-                          src={searchImagePreview}
-                          alt="Search preview"
-                          className="h-32 w-32 rounded-lg object-cover"
-                        />
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={clearImageSearch}
-                          className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm"
-                        >
-                          <X className="h-3 w-3" />
-                        </motion.button>
-                      </div>
-                      <div className="flex-1">
-                        <p className="mb-1 text-sm font-medium text-text-primary">
-                          {searchImageFile?.name}
-                        </p>
-                        <p className="mb-3 text-xs text-text-tertiary">
-                          {searchImageFile &&
-                            (searchImageFile.size / 1024 / 1024).toFixed(2)}{" "}
-                          MB
-                        </p>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={handleImageSearch}
-                          disabled={isUploadingImage}
-                          className="flex items-center gap-2 rounded-lg bg-accent-gold px-4 py-2 text-sm font-semibold text-bg-deep transition-colors hover:bg-accent-gold-light disabled:opacity-50"
-                        >
-                          {isUploadingImage ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Analyzing...
-                            </>
-                          ) : (
-                            <>
-                              <Bird className="h-4 w-4" />
-                              Identify Species
-                            </>
-                          )}
-                        </motion.button>
-
-                        {imageSearchResult && imageSearchResult.tags && (
-                          <div className="mt-3 space-y-1.5">
-                            <p className="text-xs font-medium text-accent-emerald">
-                              Species detected:
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {Object.entries(imageSearchResult.tags).map(
-                                ([sp, ct]) => (
-                                  <span
-                                    key={sp}
-                                    className="flex items-center gap-1 rounded-full bg-accent-emerald/10 px-2.5 py-1 text-xs font-medium text-accent-emerald"
-                                  >
-                                    <Bird className="h-3 w-3" />
-                                    <span className="capitalize">{sp}</span>
-                                    <span className="rounded-full bg-accent-emerald/20 px-1.5 text-[10px]">
-                                      {ct}
-                                    </span>
-                                  </span>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setIsDragging(true);
-                      }}
-                      onDragLeave={() => setIsDragging(false)}
-                      onDrop={handleImageDrop}
-                      className={`flex flex-col items-center rounded-xl border-2 border-dashed p-6 transition-colors ${
-                        isDragging
-                          ? "border-accent-gold/50 bg-accent-gold/5"
-                          : "border-border hover:border-border-light"
-                      }`}
-                    >
-                      <Upload className="mb-2 h-6 w-6 text-text-tertiary" />
-                      <p className="mb-1 text-sm font-medium text-text-secondary">
-                        Drop an image here to identify species
-                      </p>
-                      <label className="cursor-pointer text-xs font-medium text-accent-gold transition-colors hover:text-accent-gold-light">
-                        or click to browse
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleImageSelect(file);
-                          }}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* Error banner */}
@@ -379,8 +179,7 @@ export default function GalleryPage() {
               Your gallery is empty
             </p>
             <p className="mt-1 text-xs text-text-tertiary">
-              Upload images from the Upload page or use the camera icon above to
-              identify a bird
+              Upload images from the Scan page to get started
             </p>
           </motion.div>
         ) : filteredItems.length === 0 ? (
