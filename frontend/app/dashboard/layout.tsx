@@ -1,4 +1,4 @@
-import Sidebar from "@/app/components/Sidebar";
+import TopNav from "@/app/components/Sidebar";
 
 export default function DashboardLayout({
   children,
@@ -7,8 +7,8 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="min-h-screen bg-bg-deep nature-bg">
-      <Sidebar />
-      <main className="pl-64">
+      <TopNav />
+      <main className="pt-14">
         <div className="p-8">{children}</div>
       </main>
     </div>
