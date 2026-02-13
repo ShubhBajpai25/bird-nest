@@ -19,7 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import PageTransition from "@/app/components/PageTransition";
-import { BirdNestAPI, type FileMetadata } from "@/app/lib/api";
+import { BirdNestAPI, S3_BUCKET_URL, type FileMetadata } from "@/app/lib/api";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -568,13 +568,13 @@ export default function UploadPage() {
                             <div className="shrink-0">
                               {activeDet.thumbnailUrl ? (
                                 <img
-                                  src={activeDet.thumbnailUrl}
+                                  src={activeDet.thumbnailUrl} // FIX: Use the thumbnail URL, not s3Url (which might be a video)
                                   alt={activeDet.fileName}
                                   className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
                                 />
-                              ) : activeDet.preview ? (
+                              ) : activeDet.s3Url || activeDet.preview ? (
                                 <img
-                                  src={activeDet.preview}
+                                  src={activeDet.s3Url || activeDet.preview} // FIX: Use the property from activeDet
                                   alt={activeDet.fileName}
                                   className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
                                 />
