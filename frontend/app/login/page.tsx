@@ -24,7 +24,7 @@ export default function LoginPage() {
       const { isSignedIn, nextStep } = await signIn({ username: email, password });
       
       if (isSignedIn) {
-        router.push("/dashboard/gallery");
+        router.push("/dashboard");
       } else if (nextStep.signInStep === "CONFIRM_SIGN_UP") {
         setError("Please check your email to verify your account.");
       }
