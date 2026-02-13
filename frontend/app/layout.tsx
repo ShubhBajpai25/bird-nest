@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "BirdNest — Bird Detection Hub",
-  description: "Upload, detect, and catalog bird species with AI-powered analysis",
+  description: "Upload, detect, and catalog different bird species",
 };
 
 export default function RootLayout({
