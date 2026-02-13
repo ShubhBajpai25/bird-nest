@@ -183,30 +183,24 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  pollForResults: async (s3Url: string, attempts = 30): Promise<FileMetadata> => {
-    // Give the Lambda a 2-second head start before the first poll
-    await new Promise((r) => setTimeout(r, 2000));
+  pollForResults: async (s3Url: string, attempts = 40): Promise<FileMetadata> => {
+  // Give the AI a 3-second head start
+  await new Promise((r) => setTimeout(r, 3000));
 
-    for (let i = 0; i < attempts; i++) {
-      try {
-        console.log(`Polling attempt ${i + 1}/${attempts} for: ${s3Url}`);
-        const data = await BirdNestAPI.searchByFile(s3Url);
-        
-        // Success condition: the record exists AND has tags
-        if (data && data.tags && Object.keys(data.tags).length > 0) {
-          console.log("🎯 AI Results found!");
-          return data;
-        }
-      } catch (err) {
-        // If searchByFile returns 404/500 because the record isn't in DB yet, 
-        // we just log it and keep waiting.
-        console.warn("Record not ready yet...");
+  for (let i = 0; i < attempts; i++) { // Use i++ to wait the full 40 attempts
+    try {
+      const data = await BirdNestAPI.searchByFile(s3Url);
+      if (data && data.tags && Object.keys(data.tags).length > 0) {
+        return data;
       }
-      
-      // Wait 1.5 seconds between each poll
-      await new Promise((r) => setTimeout(r, 1500));
+    } catch (err) {
+      // Log errors so you can see if you are being throttled (Error 429)
+      console.warn("Poll attempt failed or throttled:", err);
     }
-    throw new Error("Timeout: AI took too long to process. Please refresh the gallery in a moment.");
+    // Wait 1.5 seconds to respect your API Gateway throttling limits
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw new Error("AI is still processing. Check the gallery in a few seconds!");
   },
 };
 
