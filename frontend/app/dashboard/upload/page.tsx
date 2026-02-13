@@ -183,8 +183,15 @@ export default function UploadPage() {
   // ── Upload + poll ──────────────────────────────────
 
   const uploadAll = async () => {
-    const pending = files.filter((f) => f.status === "pending");
+    console.log("🚀 UploadAll started..."); // Debug Log 1
 
+    const pending = files.filter((f) => f.status === "pending");
+    if (pending.length === 0) {
+        console.log("⚠️ No pending files found.");
+        return;
+    }
+
+    // Update UI to 'uploading'
     setFiles((prev) =>
       prev.map((f) =>
         f.status === "pending" ? { ...f, status: "uploading" as const } : f
@@ -192,43 +199,70 @@ export default function UploadPage() {
     );
 
     for (const pf of pending) {
-      const result = await BirdNestAPI.uploadFile(pf.file);
+      console.log(`📤 Uploading file: ${pf.file.name}`); // Debug Log 2
+      
+      try {
+          // --- THE DANGER ZONE ---
+          const result = await BirdNestAPI.uploadFile(pf.file);
+          console.log("✅ API Response:", result); // Debug Log 3
 
-      if (result.success && result.s3_url) {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === pf.id
-              ? { ...f, status: "done" as const, s3Key: result.key }
-              : f
-          )
-        );
+          if (result.success && result.s3_url) {
+            // SUCCESS LOGIC
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === pf.id
+                  ? { ...f, status: "done" as const, s3Key: result.key }
+                  : f
+              )
+            );
 
-        const s3Url = result.s3_url;
-        const detId = pf.id + "-det";
-        const newDetection: DetectionResult = {
-          id: detId,
-          fileName: pf.file.name,
-          fileType: getFileType(pf.file),
-          s3Url: s3Url,
-          preview: s3Url,
-          status: "processing",
-          startTime: Date.now(),
-          elapsedMs: 0,
-        };
+            const s3Url = result.s3_url;
+            const detId = pf.id + "-det";
+            
+            // Fix: Ensure we use the S3 URL for the preview to avoid 404s
+            const newDetection: DetectionResult = {
+              id: detId,
+              fileName: pf.file.name,
+              fileType: getFileType(pf.file),
+              s3Url: s3Url,
+              preview: s3Url, // <--- Key Fix from before
+              status: "processing",
+              startTime: Date.now(),
+              elapsedMs: 0,
+            };
 
-        setDetections((prev) => {
-          setActiveIdx(prev.length);
-          return [...prev, newDetection];
-        });
-        startPolling(detId, s3Url);
-      } else {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === pf.id
-              ? { ...f, status: "error" as const, error: result.error }
-              : f
-          )
-        );
+            setDetections((prev) => {
+              setActiveIdx(prev.length);
+              return [...prev, newDetection];
+            });
+            
+            console.log(`📡 Starting polling for: ${s3Url}`); // Debug Log 4
+            startPolling(detId, s3Url);
+            
+          } else {
+            // LOGIC FAILURE (API returned 200, but said success: false)
+            console.error("❌ Upload logic failed:", result.error);
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === pf.id
+                  ? { ...f, status: "error" as const, error: result.error || "Upload failed" }
+                  : f
+              )
+            );
+          }
+
+      } catch (error: any) {
+          // --- THE CRASH HANDLER ---
+          // This catches Network Errors, CORS, and 500s that crash fetch
+          console.error("🔥 CRITICAL UPLOAD CRASH:", error); 
+          
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === pf.id
+                ? { ...f, status: "error" as const, error: error.message || "Network Error" }
+                : f
+            )
+          );
       }
     }
   };
