@@ -38,30 +38,47 @@ def lambda_handler(event, context):
         
     except Exception as e:
         logger.error(f"Error processing batch: {str(e)}")
-        # Return 500 so Lambda knows to retry if needed
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
 def process_s3_file(bucket_name, object_key):
-    # --- 1. CONFIG & CACHING ---
+    # Configuration
     MODEL_BUCKET = os.environ.get('MODEL_BUCKET', bucket_name)
     MODEL_KEY = os.environ.get('MODEL_KEY', 'models/model.pt')
     CONFIDENCE = float(os.environ.get('CONFIDENCE_THRESHOLD', '0.5'))
+
+    # --- 1. METADATA EXTRACTION ---
+    logger.info(f"🔍 INSPECTING METADATA for {object_key}")
+    user_id = 'anonymous-user' 
     
+    try:
+        response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
+        raw_metadata = response.get('Metadata', {})
+        logger.info(f"RAW METADATA FROM S3: {json.dumps(raw_metadata)}")
+        
+        for key, value in raw_metadata.items():
+            clean_key = key.lower().replace('x-amz-meta-', '')
+            if clean_key == 'userid':
+                user_id = value
+                break
+        logger.info(f"✅ FINAL RESOLVED USER ID: {user_id}")
+            
+    except Exception as e:
+        logger.error(f"❌ METADATA EXTRACTION FAILED: {str(e)}")
+    
+    # 2. MODEL DOWNLOAD
     model_path = '/tmp/model.pt'
     if not os.path.exists(model_path):
         logger.info(f"Downloading model from {MODEL_BUCKET}/{MODEL_KEY}...")
         s3_client.download_file(MODEL_BUCKET, MODEL_KEY, model_path)
-
-    # --- 2. THE SIMPLE BRIDGE ---
-    # We skip all head_object/metadata calls to save time and avoid race conditions.
-    user_id = 'anonymous-user'
-
-    # --- 3. DOWNLOAD & DETECT ---
+    
     with tempfile.TemporaryDirectory() as temp_dir:
+        # 3. DOWNLOAD MEDIA
         input_filename = os.path.basename(object_key)
         input_path = os.path.join(temp_dir, input_filename)
+        logger.info(f"Downloading media file: {object_key}")
         s3_client.download_file(bucket_name, object_key, input_path)
         
+        # 4. RUN DETECTION
         output_dir = os.path.join(temp_dir, 'output')
         results = detect_birds_in_file(
             input_path=input_path,
@@ -69,28 +86,32 @@ def process_s3_file(bucket_name, object_key):
             confidence=CONFIDENCE,
             model_path=model_path
         )
-
+        
         tags = results.get('birds', {})
         file_type = results.get('file_type', 'unknown')
             
-        # --- 4. STANDARDIZED URL ---
-        # Hardcoding 's3.amazonaws.com' ensures it matches the frontend's normalized search.
+        # 5. CONSTRUCT S3 URL (The Key for DB)
         s3_url = f"https://{bucket_name}.s3.amazonaws.com/{object_key}"
         
         thumbnail_url = None
         if file_type == 'image':
             filename_no_ext = os.path.splitext(input_filename)[0]
-            thumbnail_url = f"https://{bucket_name}.s3.amazonaws.com/thumbnails/{filename_no_ext}-thumb.jpg"
+            thumbnail_key = f"thumbnails/{filename_no_ext}-thumb.jpg"
+            thumbnail_url = f"https://{bucket_name}.s3.amazonaws.com/{thumbnail_key}"
 
-        # --- 5. DYNAMODB SYNC ---
+        # 6. STORE IN DYNAMODB
         item = {
             's3_url': s3_url,
-            'user_id': user_id, # Always anonymous for the worker
+            'user_id': user_id,
             'file_type': file_type,
             'tags': tags
         }
+        
         if thumbnail_url:
             item['thumbnail_s3_url'] = thumbnail_url
             
-        media_table.put_item(Item={k: v for k, v in item.items() if v is not None})
-        logger.info(f"✅ SYNCED: {object_key} as anonymous. Tags: {tags}")
+        # Remove None values
+        item = {k: v for k, v in item.items() if v is not None}
+
+        media_table.put_item(Item=item)
+        logger.info(f"Successfully tagged {object_key} for User {user_id}: {tags}")

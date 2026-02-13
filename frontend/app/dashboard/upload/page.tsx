@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
   Image as ImageIcon,
-  Music,
   Video,
   X,
   Check,
@@ -16,13 +15,11 @@ import {
   Bird,
   Loader2,
   Clock,
-  Sparkles,
   ArrowLeft,
-  Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
 import PageTransition from "@/app/components/PageTransition";
-import { BirdNestAPI, S3_BUCKET_URL, type FileMetadata } from "@/app/lib/api";
+import { BirdNestAPI, type FileMetadata } from "@/app/lib/api";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -44,12 +41,10 @@ interface DetectionResult {
   preview?: string;
   status: "processing" | "done" | "error";
   tags?: Record<string, number>;
-  thumbnailUrl?: string; // We keep the type definition to avoid errors, but we won't use it
+  thumbnailUrl?: string; 
   startTime: number;
   elapsedMs: number;
   error?: string;
-  funFact?: string;
-  funFactLoading?: boolean;
 }
 
 const typeConfig = {
@@ -91,14 +86,11 @@ export default function UploadPage() {
   const [activeIdx, setActiveIdx] = useState(0);
   const pollingRef = useRef<Set<string>>(new Set());
 
-  // Keep activeIdx in bounds
   useEffect(() => {
     if (detections.length > 0 && activeIdx >= detections.length) {
       setActiveIdx(detections.length - 1);
     }
   }, [detections.length, activeIdx]);
-
-  // ── File handling ──────────────────────────────────
 
   const handleFiles = useCallback((fileList: FileList) => {
     const newFiles: UploadFile[] = Array.from(fileList).map((file) => ({
@@ -136,8 +128,6 @@ export default function UploadPage() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  // ── Polling logic ──────────────────────────────────
-
   const startPolling = useCallback(
     (detectionId: string, s3Url: string) => {
       if (pollingRef.current.has(detectionId)) return;
@@ -147,60 +137,19 @@ export default function UploadPage() {
         try {
           const result: FileMetadata = await BirdNestAPI.pollForResults(s3Url);
           const endTime = Date.now();
-          const tags = result.tags || {};
           setDetections((prev) =>
             prev.map((d) =>
               d.id === detectionId
                 ? {
                     ...d,
                     status: "done" as const,
-                    tags,
-                    thumbnailUrl: undefined,
+                    tags: result.tags || {},
+                    thumbnailUrl: undefined, 
                     elapsedMs: endTime - d.startTime,
-                    funFactLoading: Object.keys(tags).length > 0,
                   }
                 : d
             )
           );
-
-          // Fetch fun fact for the top detected species
-          const speciesList = Object.keys(tags);
-          if (speciesList.length > 0) {
-            const topSpecies = speciesList[0];
-            try {
-              const res = await fetch("/api/funfact", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ species: topSpecies }),
-              });
-              if (res.ok) {
-                const data = await res.json();
-                setDetections((prev) =>
-                  prev.map((d) =>
-                    d.id === detectionId
-                      ? { ...d, funFact: data.funFact, funFactLoading: false }
-                      : d
-                  )
-                );
-              } else {
-                setDetections((prev) =>
-                  prev.map((d) =>
-                    d.id === detectionId
-                      ? { ...d, funFactLoading: false }
-                      : d
-                  )
-                );
-              }
-            } catch {
-              setDetections((prev) =>
-                prev.map((d) =>
-                  d.id === detectionId
-                    ? { ...d, funFactLoading: false }
-                    : d
-                )
-              );
-            }
-          }
         } catch (err) {
           const endTime = Date.now();
           setDetections((prev) =>
@@ -224,16 +173,9 @@ export default function UploadPage() {
     []
   );
 
-  // ── Upload + poll ──────────────────────────────────
-
   const uploadAll = async () => {
-    console.log("🚀 UploadAll started...");
-
     const pending = files.filter((f) => f.status === "pending");
-    if (pending.length === 0) {
-        console.log("⚠️ No pending files found.");
-        return;
-    }
+    if (pending.length === 0) return;
 
     setFiles((prev) =>
       prev.map((f) =>
@@ -242,11 +184,8 @@ export default function UploadPage() {
     );
 
     for (const pf of pending) {
-      console.log(`📤 Uploading file: ${pf.file.name} (Type: ${pf.file.type})`);
-      
       try {
           const result = await BirdNestAPI.uploadFile(pf.file);
-          console.log("✅ API Response:", result);
 
           if (result.success && result.s3_url) {
             setFiles((prev) =>
@@ -276,11 +215,9 @@ export default function UploadPage() {
               return [...prev, newDetection];
             });
             
-            console.log(`📡 Starting polling for: ${s3Url}`);
             startPolling(detId, s3Url);
             
           } else {
-            console.error("❌ Upload logic failed:", result.error);
             setFiles((prev) =>
               prev.map((f) =>
                 f.id === pf.id
@@ -291,7 +228,6 @@ export default function UploadPage() {
           }
 
       } catch (error: any) {
-          console.error("🔥 CRITICAL UPLOAD CRASH:", error); 
           setFiles((prev) =>
             prev.map((f) =>
               f.id === pf.id
@@ -303,19 +239,14 @@ export default function UploadPage() {
     }
   };
 
-  // ── Carousel nav ───────────────────────────────────
-
   const goLeft = () => setActiveIdx((i) => Math.max(0, i - 1));
   const goRight = () =>
     setActiveIdx((i) => Math.min(detections.length - 1, i + 1));
 
   const activeDet = detections[activeIdx] ?? null;
 
-  // ── Render ─────────────────────────────────────────
-
   return (
     <PageTransition>
-      {/* Back to Dashboard */}
       <Link href="/dashboard">
         <motion.div
           whileHover={{ scale: 1.08 }}
@@ -327,28 +258,19 @@ export default function UploadPage() {
       </Link>
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-text-primary">
-            Upload Media
-          </h1>
+          <h1 className="text-2xl font-bold text-text-primary">Upload Media</h1>
           <p className="mt-1 text-sm text-text-secondary">
             Drop your bird images or video clips for model detection!
           </p>
         </div>
 
-        {/* ── Drop zone ── */}
         <motion.div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          animate={
-            isDragging
-              ? { scale: 1.02, borderColor: "rgba(201,168,76,0.5)" }
-              : { scale: 1 }
-          }
+          animate={isDragging ? { scale: 1.02, borderColor: "rgba(201,168,76,0.5)" } : { scale: 1 }}
           className={`relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-12 transition-colors duration-300 ${
-            isDragging
-              ? "border-accent-gold/50 bg-accent-gold/5"
-              : "border-border hover:border-border-light hover:bg-bg-surface/30"
+            isDragging ? "border-accent-gold/50 bg-accent-gold/5" : "border-border hover:border-border-light hover:bg-bg-surface/30"
           }`}
         >
           <motion.div
@@ -356,17 +278,13 @@ export default function UploadPage() {
             transition={{ type: "spring", stiffness: 300 }}
           >
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-gold/10">
-              <CloudUpload
-                className={`h-8 w-8 ${isDragging ? "text-accent-gold" : "text-text-tertiary"} transition-colors`}
-              />
+              <CloudUpload className={`h-8 w-8 ${isDragging ? "text-accent-gold" : "text-text-tertiary"} transition-colors`} />
             </div>
           </motion.div>
           <p className="mb-1 text-base font-semibold text-text-primary">
             {isDragging ? "Release to upload" : "Drag & drop files here"}
           </p>
-          <p className="mb-4 text-sm text-text-tertiary">
-            Images and video files supported
-          </p>
+          <p className="mb-4 text-sm text-text-tertiary">Images and video files supported</p>
           <label className="cursor-pointer">
             <motion.span
               whileHover={{ scale: 1.03 }}
@@ -376,25 +294,12 @@ export default function UploadPage() {
               <Upload className="h-4 w-4" />
               Browse Files
             </motion.span>
-            <input
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              onChange={(e) => e.target.files && handleFiles(e.target.files)}
-              className="hidden"
-            />
+            <input type="file" multiple accept="image/*,video/*" onChange={(e) => e.target.files && handleFiles(e.target.files)} className="hidden" />
           </label>
            
-           {/* Helper Icons */}
           <div className="mt-6 flex gap-3">
-            {[
-              { icon: ImageIcon, label: "Images", color: "text-blue-400/60" },
-              { icon: Video, label: "Video", color: "text-amber-400/60" },
-            ].map(({ icon: Icon, label, color }) => (
-              <span
-                key={label}
-                className={`flex items-center gap-1.5 text-xs ${color}`}
-              >
+            {[{ icon: ImageIcon, label: "Images", color: "text-blue-400/60" }, { icon: Video, label: "Video", color: "text-amber-400/60" }].map(({ icon: Icon, label, color }) => (
+              <span key={label} className={`flex items-center gap-1.5 text-xs ${color}`}>
                 <Icon className="h-3.5 w-3.5" />
                 {label}
               </span>
@@ -402,18 +307,11 @@ export default function UploadPage() {
           </div>
         </motion.div>
 
-        {/* ── File list ── */}
         <AnimatePresence>
           {files.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-6"
-            >
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-text-secondary">
-                  {files.length} file{files.length > 1 ? "s" : ""} selected
-                </h2>
+                <h2 className="text-sm font-semibold text-text-secondary">{files.length} file{files.length > 1 ? "s" : ""} selected</h2>
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
@@ -432,77 +330,27 @@ export default function UploadPage() {
                     const config = typeConfig[f.type];
                     const Icon = config.icon;
                     return (
-                      <motion.div
-                        key={f.id}
-                        layout
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 20, height: 0 }}
-                        className="flex items-center gap-4 rounded-xl border border-border bg-bg-surface/60 p-4"
-                      >
+                      <motion.div key={f.id} layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20, height: 0 }} className="flex items-center gap-4 rounded-xl border border-border bg-bg-surface/60 p-4">
                         {f.preview ? (
-                          <div className="h-12 w-12 overflow-hidden rounded-lg">
-                            <img
-                              src={f.preview}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
+                          <div className="h-12 w-12 overflow-hidden rounded-lg"><img src={f.preview} alt="" className="h-full w-full object-cover" /></div>
                         ) : (
-                          <div
-                            className={`flex h-12 w-12 items-center justify-center rounded-lg ${config.bg}`}
-                          >
-                            <Icon className={`h-5 w-5 ${config.color}`} />
-                          </div>
+                          <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${config.bg}`}><Icon className={`h-5 w-5 ${config.color}`} /></div>
                         )}
-
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-text-primary">
-                            {f.file.name}
-                          </p>
-                          <p className="text-xs text-text-tertiary">
-                            {(f.file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
+                          <p className="truncate text-sm font-medium text-text-primary">{f.file.name}</p>
+                          <p className="text-xs text-text-tertiary">{(f.file.size / 1024 / 1024).toFixed(2)} MB</p>
                           {f.status === "uploading" && (
-                            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-bg-hover">
-                              <motion.div
-                                className="h-full rounded-full bg-accent-gold"
-                                initial={{ width: "0%" }}
-                                animate={{ width: "90%" }}
-                                transition={{ duration: 8, ease: "easeOut" }}
-                              />
-                            </div>
+                            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-bg-hover"><motion.div className="h-full rounded-full bg-accent-gold" initial={{ width: "0%" }} animate={{ width: "90%" }} transition={{ duration: 8, ease: "easeOut" }} /></div>
                           )}
-                          {f.status === "done" && f.s3Key && (
-                            <p className="mt-1 truncate text-[10px] text-accent-emerald">
-                              {f.s3Key}
-                            </p>
-                          )}
-                          {f.status === "error" && f.error && (
-                            <p className="mt-1 truncate text-[10px] text-danger">
-                              {f.error}
-                            </p>
-                          )}
+                          {f.status === "done" && f.s3Key && <p className="mt-1 truncate text-[10px] text-accent-emerald">{f.s3Key}</p>}
+                          {f.status === "error" && f.error && <p className="mt-1 truncate text-[10px] text-danger">{f.error}</p>}
                         </div>
-                        
-                        {/* Remove/Status Buttons */}
                         {f.status === "done" ? (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-emerald/10">
-                            <Check className="h-4 w-4 text-accent-emerald" />
-                          </div>
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-emerald/10"><Check className="h-4 w-4 text-accent-emerald" /></div>
                         ) : f.status === "error" ? (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-danger/10">
-                            <FileWarning className="h-4 w-4 text-danger" />
-                          </div>
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-danger/10"><FileWarning className="h-4 w-4 text-danger" /></div>
                         ) : (
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => removeFile(f.id)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-danger/10 hover:text-danger"
-                          >
-                            <X className="h-4 w-4" />
-                          </motion.button>
+                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => removeFile(f.id)} className="flex h-8 w-8 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-danger/10 hover:text-danger"><X className="h-4 w-4" /></motion.button>
                         )}
                       </motion.div>
                     );
@@ -513,262 +361,94 @@ export default function UploadPage() {
           )}
         </AnimatePresence>
 
-        {/* ── Detection Results ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mt-8"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-8">
           <div className="mb-4 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-text-primary">
-              Detection Results
-            </h2>
-            {detections.length > 1 && (
-              <span className="ml-auto text-xs text-text-tertiary">
-                {activeIdx + 1} / {detections.length}
-              </span>
-            )}
+            <h2 className="text-sm font-semibold text-text-primary">Detection Results</h2>
+            {detections.length > 1 && <span className="ml-auto text-xs text-text-tertiary">{activeIdx + 1} / {detections.length}</span>}
           </div>
 
           <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-surface/60">
             {detections.length === 0 ? (
-              /* ── Empty state ── */
               <div className="flex flex-col items-center justify-center py-16">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover/60">
-                  <Bird className="h-6 w-6 text-text-tertiary" />
-                </div>
-                <p className="text-sm font-medium text-text-secondary">
-                  Detection results will appear here
-                </p>
-                <p className="mt-1 max-w-xs text-center text-xs text-text-tertiary">
-                  Upload your bird images or videos and the YOLOv5 model will
-                  automatically identify species. Results for each upload will be
-                  shown in this section.
-                </p>
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover/60"><Bird className="h-6 w-6 text-text-tertiary" /></div>
+                <p className="text-sm font-medium text-text-secondary">Detection results will appear here</p>
+                <p className="mt-1 max-w-xs text-center text-xs text-text-tertiary">Upload your bird images or videos and the YOLOv5 model will automatically identify species. Results for each upload will be shown in this section.</p>
               </div>
             ) : (
-              /* ── Carousel content ── */
               <div className="relative">
-                {/* Left/Right Arrows */}
                 {detections.length > 1 && activeIdx > 0 && (
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={goLeft}
-                    className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </motion.button>
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={goLeft} className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"><ChevronLeft className="h-5 w-5" /></motion.button>
                 )}
-                {detections.length > 1 &&
-                  activeIdx < detections.length - 1 && (
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={goRight}
-                      className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </motion.button>
-                  )}
+                {detections.length > 1 && activeIdx < detections.length - 1 && (
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={goRight} className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"><ChevronRight className="h-5 w-5" /></motion.button>
+                )}
 
                 <AnimatePresence mode="wait">
                   {activeDet && (
-                    <motion.div
-                      key={activeDet.id}
-                      initial={{ opacity: 0, x: 40 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -40 }}
-                      transition={{ duration: 0.25 }}
-                    >
+                    <motion.div key={activeDet.id} initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} transition={{ duration: 0.25 }}>
                       {activeDet.status === "processing" ? (
-                        /* ── Processing state ── */
                         <div className="flex flex-col items-center py-14">
                           <div className="relative mb-5">
                             {activeDet.preview ? (
                               <div className="relative h-40 w-40 overflow-hidden rounded-2xl border border-border">
-                                <img
-                                  src={activeDet.preview}
-                                  alt=""
-                                  className="h-full w-full object-cover opacity-60"
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                                  <Loader2 className="h-8 w-8 animate-spin text-accent-gold" />
-                                </div>
+                                <img src={activeDet.preview} alt="" className="h-full w-full object-cover opacity-60" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30"><Loader2 className="h-8 w-8 animate-spin text-accent-gold" /></div>
                               </div>
                             ) : (
-                              <div className="flex h-40 w-40 items-center justify-center rounded-2xl border border-border bg-bg-deep">
-                                <Loader2 className="h-8 w-8 animate-spin text-accent-gold" />
-                              </div>
+                              <div className="flex h-40 w-40 items-center justify-center rounded-2xl border border-border bg-bg-deep"><Loader2 className="h-8 w-8 animate-spin text-accent-gold" /></div>
                             )}
                           </div>
-                          <p className="text-sm font-semibold text-text-primary">
-                            Analyzing{" "}
-                            <span className="text-accent-gold">
-                              {activeDet.fileName}
-                            </span>
-                          </p>
-                          <p className="mt-1 text-xs text-text-tertiary">
-                            AI is identifying bird species...
-                          </p>
-                          <div className="mt-4 flex items-center gap-1.5 rounded-full bg-accent-gold/10 px-3 py-1.5 text-xs font-medium text-accent-gold">
-                            <Clock className="h-3.5 w-3.5" />
-                            <LiveTimer startTime={activeDet.startTime} />
-                          </div>
+                          <p className="text-sm font-semibold text-text-primary">Analyzing <span className="text-accent-gold">{activeDet.fileName}</span></p>
+                          <p className="mt-1 text-xs text-text-tertiary">AI is identifying bird species...</p>
+                          <div className="mt-4 flex items-center gap-1.5 rounded-full bg-accent-gold/10 px-3 py-1.5 text-xs font-medium text-accent-gold"><Clock className="h-3.5 w-3.5" /><LiveTimer startTime={activeDet.startTime} /></div>
                         </div>
                       ) : activeDet.status === "error" ? (
-                        /* ── Error state ── */
                         <div className="flex flex-col items-center py-14">
-                          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-danger/10">
-                            <FileWarning className="h-6 w-6 text-danger" />
-                          </div>
-                          <p className="text-sm font-semibold text-text-primary">
-                            Detection failed for{" "}
-                            <span className="text-danger">
-                              {activeDet.fileName}
-                            </span>
-                          </p>
-                          <p className="mt-1 text-xs text-text-tertiary">
-                            {activeDet.error}
-                          </p>
-                          <div className="mt-3 flex items-center gap-1.5 text-xs text-text-tertiary">
-                            <Clock className="h-3 w-3" />
-                            {formatTime(activeDet.elapsedMs)}
-                          </div>
+                          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-danger/10"><FileWarning className="h-6 w-6 text-danger" /></div>
+                          <p className="text-sm font-semibold text-text-primary">Detection failed for <span className="text-danger">{activeDet.fileName}</span></p>
+                          <p className="mt-1 text-xs text-text-tertiary">{activeDet.error}</p>
+                          <div className="mt-3 flex items-center gap-1.5 text-xs text-text-tertiary"><Clock className="h-3 w-3" />{formatTime(activeDet.elapsedMs)}</div>
                         </div>
                       ) : (
-                       /* ── Success state ── */
                         <div className="p-5">
                           <div className="flex flex-col gap-5 sm:flex-row">
                             <div className="shrink-0">
-                                {/* ⬇️ LOGIC CHANGE: Completely prioritized s3Url over thumbnail */}
-                                {/* If it is a VIDEO, use a video tag */}
                                 {activeDet.fileType === 'video' && activeDet.preview ? (
-                                    <video
-                                    src={activeDet.preview}
-                                    className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
-                                    controls
-                                    />
-                                /* If it is an IMAGE, use the S3 URL directly */
+                                    <video src={activeDet.preview} className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48" controls />
                                 ) : activeDet.s3Url || activeDet.preview ? (
-                                    <img
-                                    // FORCE ORIGINAL IMAGE
-                                    src={activeDet.s3Url || activeDet.preview}
-                                    alt="" 
-                                    className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48"
-                                    onError={(e) => {
-                                        console.error("❌ Image Load Error:", e.currentTarget.src);
-                                        e.currentTarget.style.border = "2px solid red";
-                                    }}
-                                    />
-                                /* Fallback */
+                                    <img src={activeDet.s3Url || activeDet.preview} alt="" className="h-56 w-56 rounded-xl border border-border object-cover sm:h-48 sm:w-48" onError={(e) => { console.error("❌ Image Load Error:", e.currentTarget.src); e.currentTarget.style.border = "2px solid red"; }} />
                                 ) : (
-                                    <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-border bg-bg-deep">
-                                    <Video className="h-10 w-10 text-text-tertiary" />
-                                    </div>
+                                    <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-border bg-bg-deep"><Video className="h-10 w-10 text-text-tertiary" /></div>
                                 )}
                             </div>
-
-                            {/* Details */}
                             <div className="flex-1">
-                              <div className="mb-1 flex items-center gap-2">
-                                <Check className="h-4 w-4 text-accent-emerald" />
-                                <h3 className="text-base font-semibold text-text-primary">
-                                  Detection Complete
-                                </h3>
-                              </div>
-                              <p className="mb-4 truncate text-xs text-text-tertiary">
-                                {activeDet.fileName}
-                              </p>
-
-                              {activeDet.tags &&
-                              Object.keys(activeDet.tags).length > 0 ? (
+                              <div className="mb-1 flex items-center gap-2"><Check className="h-4 w-4 text-accent-emerald" /><h3 className="text-base font-semibold text-text-primary">Detection Complete</h3></div>
+                              <p className="mb-4 truncate text-xs text-text-tertiary">{activeDet.fileName}</p>
+                              {activeDet.tags && Object.keys(activeDet.tags).length > 0 ? (
                                 <div className="space-y-2">
-                                  {Object.entries(activeDet.tags).map(
-                                    ([species, count]) => (
-                                      <div
-                                        key={species}
-                                        className="flex items-center justify-between rounded-lg border border-border bg-bg-deep px-4 py-2.5"
-                                      >
-                                        <div className="flex items-center gap-2.5">
-                                          <Bird className="h-4 w-4 text-accent-gold" />
-                                          <span className="text-sm font-semibold capitalize text-text-primary">
-                                            {species}
-                                          </span>
-                                        </div>
-                                        <span className="rounded-full bg-accent-emerald/10 px-2.5 py-0.5 text-xs font-bold text-accent-emerald">
-                                          {count}
-                                        </span>
-                                      </div>
-                                    )
-                                  )}
+                                  {Object.entries(activeDet.tags).map(([species, count]) => (
+                                    <div key={species} className="flex items-center justify-between rounded-lg border border-border bg-bg-deep px-4 py-2.5">
+                                      <div className="flex items-center gap-2.5"><Bird className="h-4 w-4 text-accent-gold" /><span className="text-sm font-semibold capitalize text-text-primary">{species}</span></div>
+                                      <span className="rounded-full bg-accent-emerald/10 px-2.5 py-0.5 text-xs font-bold text-accent-emerald">{count}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               ) : (
-                                <p className="text-sm text-text-tertiary">
-                                  No species detected.
-                                </p>
+                                <p className="text-sm text-text-tertiary">No species detected.</p>
                               )}
                             </div>
                           </div>
-
-                          {/* Fun Fact */}
-                          {(activeDet.funFactLoading || activeDet.funFact) && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: 0.15 }}
-                              className="mt-4 rounded-xl border border-accent-gold/20 bg-accent-gold/5 p-4"
-                            >
-                              <div className="mb-2 flex items-center gap-2">
-                                <Lightbulb className="h-4 w-4 text-accent-gold" />
-                                <span className="text-xs font-semibold uppercase tracking-wider text-accent-gold">
-                                  Fun Fact
-                                </span>
-                              </div>
-                              {activeDet.funFactLoading ? (
-                                <div className="flex items-center gap-2">
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-gold/60" />
-                                  <span className="text-xs text-text-tertiary">
-                                    Generating a fun fact...
-                                  </span>
-                                </div>
-                              ) : (
-                                <p className="text-sm leading-relaxed text-text-secondary">
-                                  {activeDet.funFact}
-                                </p>
-                              )}
-                            </motion.div>
-                          )}
-
-                          {/* Footer: elapsed time */}
-                          <div className="mt-4 flex items-center justify-end gap-1.5 border-t border-border pt-3 text-[11px] text-text-tertiary">
-                            <Clock className="h-3 w-3" />
-                            Processed in {formatTime(activeDet.elapsedMs)}
-                          </div>
+                          <div className="mt-4 flex items-center justify-end gap-1.5 border-t border-border pt-3 text-[11px] text-text-tertiary"><Clock className="h-3 w-3" />Processed in {formatTime(activeDet.elapsedMs)}</div>
                         </div>
                       )}
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* Dot indicators */}
                 {detections.length > 1 && (
                   <div className="flex items-center justify-center gap-1.5 border-t border-border py-3">
                     {detections.map((d, i) => (
-                      <button
-                        key={d.id}
-                        onClick={() => setActiveIdx(i)}
-                        className={`h-2 rounded-full transition-all duration-200 ${
-                          i === activeIdx
-                            ? "w-5 bg-accent-gold"
-                            : d.status === "processing"
-                              ? "w-2 bg-accent-gold/30"
-                              : d.status === "error"
-                                ? "w-2 bg-danger/40"
-                                : "w-2 bg-accent-emerald/40"
-                        }`}
-                      />
+                      <button key={d.id} onClick={() => setActiveIdx(i)} className={`h-2 rounded-full transition-all duration-200 ${i === activeIdx ? "w-5 bg-accent-gold" : d.status === "processing" ? "w-2 bg-accent-gold/30" : d.status === "error" ? "w-2 bg-danger/40" : "w-2 bg-accent-emerald/40"}`} />
                     ))}
                   </div>
                 )}
