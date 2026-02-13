@@ -79,6 +79,18 @@ body {
 .stagger-children > *:nth-child(11) { animation-delay: 0.55s; }
 .stagger-children > *:nth-child(12) { animation-delay: 0.6s; }
 
+/* ── Sliding image rows ── */
+@keyframes slide-right {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0%); }
+}
+@keyframes slide-left {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+.animate-slide-right { animation: slide-right 30s linear infinite; }
+.animate-slide-left  { animation: slide-left 30s linear infinite; }
+
 /* ── Nature-inspired ambient background ── */
 .nature-bg {
   background-image:
