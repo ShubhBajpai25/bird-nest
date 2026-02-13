@@ -176,15 +176,12 @@ export const BirdNestAPI = {
   // src/app/lib/api.ts
 
   searchByFile: async (s3Url: string): Promise<FileMetadata> => {
-    // STRATEGY: Strip the URL down to just the key, then rebuild it
-    // This removes regional differences (ap-southeast-2) and encoding mismatches
-    const urlParts = s3Url.split('/');
-    const key = urlParts.slice(3).join('/'); // Gets everything after .com/
-    
-    const bucketName = "birdnest-app-storage";
-    const normalizedUrl = `https://${bucketName}.s3.amazonaws.com/${decodeURIComponent(key)}`;
+    // NORMALIZATION: Strip region codes and rebuild the URL to match the Lambda's format
+    const url = new URL(s3Url);
+    const bucketName = "birdnest-app-storage"; 
+    const normalizedUrl = `https://${bucketName}.s3.amazonaws.com${url.pathname}`;
 
-    console.log("🔍 UI Polling for normalized URL:", normalizedUrl);
+    console.log("🔍 UI Searching for:", normalizedUrl);
 
     const res = await fetch(`${API_URL}/search/file`, {
       method: "POST",
@@ -192,28 +189,27 @@ export const BirdNestAPI = {
       body: JSON.stringify({ s3_url: normalizedUrl }), 
     });
     
-    if (!res.ok) throw new Error("File search failed");
+    if (!res.ok) throw new Error("Search failed");
     return res.json();
   },
 
   pollForResults: async (s3Url: string, attempts = 40): Promise<FileMetadata> => {
-  // Give the AI a 3-second head start
-  await new Promise((r) => setTimeout(r, 3000));
+    // 3-second head start for the Lambda to spin up
+    await new Promise((r) => setTimeout(r, 3000));
 
-  for (let i = 0; i < attempts; i++) { // Use i++ to wait the full 40 attempts
-    try {
-      const data = await BirdNestAPI.searchByFile(s3Url);
-      if (data && data.tags && Object.keys(data.tags).length > 0) {
-        return data;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const data = await BirdNestAPI.searchByFile(s3Url);
+        if (data && data.tags && Object.keys(data.tags).length > 0) {
+          return data;
+        }
+      } catch (err) {
+        // Silently wait during the polling window
       }
-    } catch (err) {
-      // Log errors so you can see if you are being throttled (Error 429)
-      console.warn("Poll attempt failed or throttled:", err);
+      // Your requested 750ms interval (approx. 30s total window)
+      await new Promise((r) => setTimeout(r, 750));
     }
-    // Wait 1.5 seconds to respect your API Gateway throttling limits
-    await new Promise((r) => setTimeout(r, 1500));
-  }
-  throw new Error("AI is still processing. Check the gallery in a few seconds!");
+    throw new Error("Timeout: The AI is still processing. Check the gallery shortly!");
   },
 };
 

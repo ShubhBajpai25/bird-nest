@@ -42,47 +42,26 @@ def lambda_handler(event, context):
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
 def process_s3_file(bucket_name, object_key):
-    # Configuration
+    # --- 1. CONFIG & CACHING ---
     MODEL_BUCKET = os.environ.get('MODEL_BUCKET', bucket_name)
     MODEL_KEY = os.environ.get('MODEL_KEY', 'models/model.pt')
     CONFIDENCE = float(os.environ.get('CONFIDENCE_THRESHOLD', '0.5'))
-
-    logger.info(f"🔍 INSPECTING METADATA for {object_key}")
-    user_id = 'anonymous-user' 
     
-    try:
-        response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
-        raw_metadata = response.get('Metadata', {})
-        
-        # DEBUG: This will show you exactly what keys are present in CloudWatch
-        logger.info(f"RAW METADATA KEYS FOUND: {list(raw_metadata.keys())}")
-        
-        # Standardize: Find the value regardless of 'x-amz-meta-' prefix or casing
-        for k, v in raw_metadata.items():
-            # S3 often returns 'userid' or 'x-amz-meta-userid'
-            clean_key = k.lower().replace('x-amz-meta-', '')
-            if clean_key == 'userid':
-                user_id = v
-                logger.info(f"🎯 MATCH FOUND! User ID is: {user_id}")
-                break
-            
-    except Exception as e:
-        logger.error(f"❌ METADATA EXTRACTION FAILED: {str(e)}")
-    
-    # 2. OPTIMIZATION: Check /tmp cache first for the model
     model_path = '/tmp/model.pt'
     if not os.path.exists(model_path):
         logger.info(f"Downloading model from {MODEL_BUCKET}/{MODEL_KEY}...")
         s3_client.download_file(MODEL_BUCKET, MODEL_KEY, model_path)
-    
+
+    # --- 2. THE SIMPLE BRIDGE ---
+    # We skip all head_object/metadata calls to save time and avoid race conditions.
+    user_id = 'anonymous-user'
+
+    # --- 3. DOWNLOAD & DETECT ---
     with tempfile.TemporaryDirectory() as temp_dir:
-        # 3. Download the Media File
         input_filename = os.path.basename(object_key)
         input_path = os.path.join(temp_dir, input_filename)
-        logger.info(f"Downloading media file: {object_key}")
         s3_client.download_file(bucket_name, object_key, input_path)
         
-        # 4. Run Detection
         output_dir = os.path.join(temp_dir, 'output')
         results = detect_birds_in_file(
             input_path=input_path,
@@ -91,34 +70,27 @@ def process_s3_file(bucket_name, object_key):
             model_path=model_path
         )
 
-        # (Deleted duplicate metadata extraction block here)
-        
-        # 5. Get detection results
         tags = results.get('birds', {})
         file_type = results.get('file_type', 'unknown')
             
-        # 6. Predict the Thumbnail URL
+        # --- 4. STANDARDIZED URL ---
+        # Hardcoding 's3.amazonaws.com' ensures it matches the frontend's normalized search.
         s3_url = f"https://{bucket_name}.s3.amazonaws.com/{object_key}"
         
         thumbnail_url = None
         if file_type == 'image':
             filename_no_ext = os.path.splitext(input_filename)[0]
-            thumbnail_key = f"thumbnails/{filename_no_ext}-thumb.jpg"
-            thumbnail_url = f"https://{bucket_name}.s3.amazonaws.com/{thumbnail_key}"
+            thumbnail_url = f"https://{bucket_name}.s3.amazonaws.com/thumbnails/{filename_no_ext}-thumb.jpg"
 
-        # 7. Store in DynamoDB
+        # --- 5. DYNAMODB SYNC ---
         item = {
             's3_url': s3_url,
-            'user_id': user_id,  # Uses the variable from step 1
+            'user_id': user_id, # Always anonymous for the worker
             'file_type': file_type,
             'tags': tags
         }
-        
         if thumbnail_url:
             item['thumbnail_s3_url'] = thumbnail_url
             
-        # Clean up item to remove None values just in case
-        item = {k: v for k, v in item.items() if v is not None}
-
-        media_table.put_item(Item=item)
-        logger.info(f"Successfully tagged {object_key} for User {user_id}: {tags}")
+        media_table.put_item(Item={k: v for k, v in item.items() if v is not None})
+        logger.info(f"✅ SYNCED: {object_key} as anonymous. Tags: {tags}")
