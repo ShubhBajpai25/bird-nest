@@ -11,8 +11,7 @@ export default function SignupPage() {
   const router = useRouter();
   
   // Form State
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState(""); // <--- New Username State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   
@@ -32,13 +31,12 @@ export default function SignupPage() {
     setError(null);
     try {
       await signUp({
-        username: email,
+        username: email, // We use Email as the login ID (per your pool config)
         password,
         options: {
           userAttributes: {
             email,
-            given_name: firstName, 
-            family_name: lastName 
+            preferred_username: username // We save the actual "Username" here
           }
         }
       });
@@ -127,36 +125,49 @@ export default function SignupPage() {
                 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
                 onSubmit={handleSignUp}
               >
-                 <div className="mb-4 grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-secondary">First Name</label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-                      <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-3 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" required />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-secondary">Last Name</label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-                      <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-3 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" required />
-                    </div>
+                {/* 1. USERNAME INPUT (Replaced First/Last Name) */}
+                <div className="mb-4">
+                  <label className="mb-1.5 block text-xs font-medium text-text-secondary">Username</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+                    <input 
+                      type="text" 
+                      value={username} 
+                      onChange={(e) => setUsername(e.target.value)} 
+                      placeholder="BirdWatcher99" 
+                      className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-3 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
+                      required 
+                    />
                   </div>
                 </div>
 
+                {/* 2. EMAIL INPUT */}
                 <div className="mb-4">
                   <label className="mb-1.5 block text-xs font-medium text-text-secondary">Email</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-4 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" required />
+                    <input 
+                      type="email" 
+                      value={email} 
+                      onChange={(e) => setEmail(e.target.value)} 
+                      className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-4 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
+                      required 
+                    />
                   </div>
                 </div>
 
+                {/* 3. PASSWORD INPUT */}
                 <div className="mb-6">
                   <label className="mb-1.5 block text-xs font-medium text-text-secondary">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-                    <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-10 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" required />
+                    <input 
+                      type={showPassword ? "text" : "password"} 
+                      value={password} 
+                      onChange={(e) => setPassword(e.target.value)} 
+                      className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-10 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30" 
+                      required 
+                    />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary">
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -168,6 +179,7 @@ export default function SignupPage() {
                 </motion.button>
               </motion.form>
             ) : (
+              // VERIFICATION FORM (Unchanged)
               <motion.form
                 key="verify-form"
                 initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
