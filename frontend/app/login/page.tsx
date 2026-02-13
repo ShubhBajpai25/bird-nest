@@ -116,7 +116,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const { isSignedIn, nextStep } = await signIn({
-        username: email,
+        username,
         password,
       });
       if (isSignedIn) {
@@ -256,15 +256,15 @@ export default function LoginPage() {
                 >
                   <div className="mb-4">
                     <label className="mb-1.5 block text-xs font-medium text-text-secondary">
-                      Email
+                      Username
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
                       <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="BirdWatcher99"
                         className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30"
                         required
                       />
@@ -352,7 +352,7 @@ export default function LoginPage() {
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
+                        placeholder="example@pigeonmail.com"
                         className="w-full rounded-lg border border-border bg-bg-deep py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30"
                         required
                       />
@@ -514,8 +514,7 @@ export default function LoginPage() {
             </span>
           </h2>
           <p className="mt-3 max-w-sm text-sm text-text-secondary">
-            Upload any bird photo and our AI will instantly identify the species,
-            count, and more.
+            Upload any cool photo of a fellow birdie and the YOLOv5 model will instantly identify the species and count.
           </p>
         </motion.div>
 
