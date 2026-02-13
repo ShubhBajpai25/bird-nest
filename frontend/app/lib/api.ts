@@ -173,12 +173,25 @@ export const BirdNestAPI = {
   },
 
   // Path: /search/file (POST)
+  // src/app/lib/api.ts
+
   searchByFile: async (s3Url: string): Promise<FileMetadata> => {
+    // STRATEGY: Strip the URL down to just the key, then rebuild it
+    // This removes regional differences (ap-southeast-2) and encoding mismatches
+    const urlParts = s3Url.split('/');
+    const key = urlParts.slice(3).join('/'); // Gets everything after .com/
+    
+    const bucketName = "birdnest-app-storage";
+    const normalizedUrl = `https://${bucketName}.s3.amazonaws.com/${decodeURIComponent(key)}`;
+
+    console.log("🔍 UI Polling for normalized URL:", normalizedUrl);
+
     const res = await fetch(`${API_URL}/search/file`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ s3_url: s3Url }),
+      body: JSON.stringify({ s3_url: normalizedUrl }), 
     });
+    
     if (!res.ok) throw new Error("File search failed");
     return res.json();
   },
