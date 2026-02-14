@@ -80,6 +80,19 @@ function LiveTimer({ startTime }: { startTime: number }) {
   return <span>{formatTime(now - startTime)}</span>;
 }
 
+function DelayNotice({ startTime }: { startTime: number }) {
+  const [showDelay, setShowDelay] = useState(Date.now() - startTime >= 30000);
+  useEffect(() => {
+    if (showDelay) return;
+    const remaining = 30000 - (Date.now() - startTime);
+    if (remaining <= 0) { setShowDelay(true); return; }
+    const timeout = setTimeout(() => setShowDelay(true), remaining);
+    return () => clearTimeout(timeout);
+  }, [startTime, showDelay]);
+  if (!showDelay) return null;
+  return <p className="mt-3 max-w-sm text-center text-xs italic text-text-tertiary">Apologies for the delay, our lambda functions are working hard towards getting your results.</p>;
+}
+
 // ── Main component ──────────────────────────────────────────────
 
 export default function UploadPage() {
@@ -443,6 +456,8 @@ export default function UploadPage() {
                           <p className="text-sm font-semibold text-text-primary">Analyzing <span className="text-accent-gold">{activeDet.fileName}</span></p>
                           <p className="mt-1 text-xs text-text-tertiary">AI is identifying bird species...</p>
                           <div className="mt-4 flex items-center gap-1.5 rounded-full bg-accent-gold/10 px-3 py-1.5 text-xs font-medium text-accent-gold"><Clock className="h-3.5 w-3.5" /><LiveTimer startTime={activeDet.startTime} /></div>
+                          <DelayNotice startTime={activeDet.startTime} />
+                          <p className="mt-4 max-w-sm text-center text-[11px] leading-relaxed text-text-tertiary">Please note that the YOLOv5 model is not completely accurate, hence, predictions can often be wrong. But don&apos;t worry! Head on over to the <Link href="/dashboard/gallery" className="font-medium text-accent-gold hover:underline">gallery</Link> where you can update the tags yourself if they seem wrong!</p>
                         </div>
                       ) : activeDet.status === "error" ? (
                         <div className="flex flex-col items-center py-14">
