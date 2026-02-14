@@ -135,14 +135,15 @@ export default function UploadPage() {
 
   // ── Analysis Logic ───────────────────────────────────
 
-  const runAnalysis = useCallback(async (detectionId: string, s3Url: string) => {
+  // UPDATE 1: Accepted 'fileType' argument here
+  const runAnalysis = useCallback(async (detectionId: string, s3Url: string, fileType: "image" | "video") => {
     try {
-      // Calls the new Gallery-based waiter in api.ts
-      const result: FileMetadata = await BirdNestAPI.waitForAnalysis(s3Url);
+      // UPDATE 2: Passed fileType to the API waiter so it knows whether to wait 45s or 5m
+      const result: FileMetadata = await BirdNestAPI.waitForAnalysis(s3Url, fileType);
       
       const endTime = Date.now();
-      
       const tags = result.tags || {};
+      
       setDetections((prev) =>
         prev.map((d) =>
           d.id === detectionId
@@ -158,7 +159,7 @@ export default function UploadPage() {
         )
       );
 
-      // Fetch fun fact for the top detected species
+      // Fetch fun fact for the top detected species (Preserved your logic)
       const speciesList = Object.keys(tags);
       if (speciesList.length > 0) {
         try {
@@ -250,8 +251,8 @@ export default function UploadPage() {
               return [...prev, newDetection];
             });
             
-            // Trigger the analysis in the background
-            runAnalysis(detId, s3Url);
+            // UPDATE 3: Passed 'pf.type' ("image" or "video") into the function
+            runAnalysis(detId, s3Url, pf.type);
             
           } else {
             setFiles((prev) =>

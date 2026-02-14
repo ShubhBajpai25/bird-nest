@@ -104,12 +104,17 @@ export const BirdNestAPI = {
   },
 
   // 4. NEW: Wait for Analysis via Gallery
-  // This replaces the old "pollForResults" logic
-  waitForAnalysis: async (targetS3Url: string, timeoutMs = 45000): Promise<FileMetadata> => {
+  // UPDATED: Accepts 'fileType' to set dynamic timeouts
+  waitForAnalysis: async (targetS3Url: string, fileType: "image" | "video" = "image"): Promise<FileMetadata> => {
     const startTime = Date.now();
     let attempts = 0;
 
-    console.log(`📡 Waiting for Gallery to sync: ${targetS3Url}`);
+    // ── DYNAMIC TIMEOUT ──
+    // Images: 45 seconds
+    // Videos: 5 minutes (300s)
+    const timeoutMs = fileType === 'video' ? 300000 : 45000;
+
+    console.log(`📡 Waiting for Gallery to sync: ${targetS3Url} (Timeout: ${timeoutMs/1000}s)`);
 
     while (Date.now() - startTime < timeoutMs) {
       attempts++;
@@ -139,7 +144,7 @@ export const BirdNestAPI = {
       await new Promise((r) => setTimeout(r, 2000));
     }
 
-    throw new Error("Analysis timed out. The file uploaded, but didn't appear in your gallery yet.");
+    throw new Error(`Analysis timed out (${timeoutMs/1000}s limit exceeded). The ${fileType} is processing in the background.`);
   },
 
   // ── Legacy / Helper Methods ───────────────────────────────────
