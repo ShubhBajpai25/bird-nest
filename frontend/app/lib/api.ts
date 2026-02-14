@@ -24,7 +24,8 @@ export interface FileMetadata {
   thumbnail_s3_url?: string;
   file_type?: string;
   tags?: Record<string, number>;
-  detected_species_list?: string[];
+  processed_at?: string;
+  user_id?: string;
 }
 
 export interface DeleteResponse {
@@ -90,7 +91,59 @@ export const BirdNestAPI = {
     }
   },
 
-  // 3. Search By Tags
+  // 3. Get Gallery (Reliable Source of Truth)
+  getGallery: async (): Promise<FileMetadata[]> => {
+    const userId = await BirdNestAPI.getUserId();
+    // Add timestamp to prevent browser caching of the list
+    const res = await fetch(`${API_URL}/gallery?userId=${userId}&t=${Date.now()}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error("Failed to fetch gallery");
+    return res.json();
+  },
+
+  // 4. NEW: Wait for Analysis via Gallery
+  // This replaces the old "pollForResults" logic
+  waitForAnalysis: async (targetS3Url: string, timeoutMs = 45000): Promise<FileMetadata> => {
+    const startTime = Date.now();
+    let attempts = 0;
+
+    console.log(`📡 Waiting for Gallery to sync: ${targetS3Url}`);
+
+    while (Date.now() - startTime < timeoutMs) {
+      attempts++;
+      try {
+        // A. Fetch the full gallery
+        const galleryItems = await BirdNestAPI.getGallery();
+        
+        // B. Find our specific file in the list by matching URL
+        const foundItem = galleryItems.find(item => item.s3_url === targetS3Url);
+
+        if (foundItem) {
+          // C. Check if it has tags (Process is complete)
+          if (foundItem.tags && Object.keys(foundItem.tags).length > 0) {
+            console.log(`✅ Found in Gallery (Attempt ${attempts}):`, foundItem.tags);
+            return foundItem;
+          } else {
+            console.log(`⏳ Item is in Gallery, but tags are empty. Waiting...`);
+          }
+        } else {
+          console.log(`⏳ File not in Gallery yet (Attempt ${attempts})...`);
+        }
+      } catch (err) {
+        console.warn(`⚠️ Gallery fetch error (ignoring):`, err);
+      }
+
+      // D. Wait 2 seconds before trying again (Backoff)
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    throw new Error("Analysis timed out. The file uploaded, but didn't appear in your gallery yet.");
+  },
+
+  // ── Legacy / Helper Methods ───────────────────────────────────
+
   searchByTags: async (tags: Record<string, number>): Promise<TagSearchResponse> => {
     const res = await fetch(`${API_URL}/search/tags`, { 
       method: "POST",
@@ -101,7 +154,6 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  // 4. Update Tags
   updateTags: async (
     urls: string[],
     operation: 0 | 1,
@@ -127,7 +179,6 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  // 5. Delete Files
   deleteFiles: async (urls: string[]): Promise<DeleteResponse> => {
     const res = await fetch(`${API_URL}/search/file`, {
       method: "DELETE",
@@ -138,18 +189,6 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  // 6. Get Gallery
-  getGallery: async (): Promise<FileMetadata[]> => {
-    const userId = await BirdNestAPI.getUserId();
-    const res = await fetch(`${API_URL}/gallery?userId=${userId}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (!res.ok) throw new Error("Failed to fetch gallery");
-    return res.json();
-  },
-
-  // Helpers
   searchByThumbnail: async (thumbnailUrl: string): Promise<ThumbnailSearchResponse> => {
     const res = await fetch(`${API_URL}/search/thumbnail`, {
       method: "POST",
@@ -168,52 +207,6 @@ export const BirdNestAPI = {
     });
     if (!res.ok) throw new Error("File search failed");
     return res.json();
-  },
-
-  // 1. The Core Fetch Function (Single Check)
-  checkAnalysisStatus: async (s3Url: string): Promise<FileMetadata | null> => {
-    try {
-      const res = await fetch(`${API_URL}/search/file`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ s3_url: s3Url }),
-      });
-      
-      if (!res.ok) return null;
-      
-      const data = await res.json();
-      // Only return data if tags are actually present
-      if (data && data.tags && Object.keys(data.tags).length > 0) {
-        return data;
-      }
-      return null; // Pending or empty
-    } catch (err) {
-      return null; // Network glitch, treat as pending
-    }
-  },
-
-  // 2. The "Await" Wrapper (Replaces Polling in UI)
-  // Usage: const result = await BirdNestAPI.waitForAnalysis(url);
-  waitForAnalysis: async (s3Url: string, timeoutMs = 30000): Promise<FileMetadata> => {
-    const startTime = Date.now();
-    let delay = 500; // Start fast (500ms)
-
-    while (Date.now() - startTime < timeoutMs) {
-      // Check the DB
-      const result = await BirdNestAPI.checkAnalysisStatus(s3Url);
-      
-      if (result) {
-        return result; // ✅ Found it! Return immediately.
-      }
-
-      // ⏳ Wait before checking again
-      await new Promise((r) => setTimeout(r, delay));
-      
-      // Backoff strategy: Increase delay slightly (max 2s) to save bandwidth
-      delay = Math.min(delay * 1.1, 2000); 
-    }
-
-    throw new Error("Analysis timed out. Please check the Gallery later.");
   },
 };
 

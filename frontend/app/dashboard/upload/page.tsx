@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react"; // Removed useRef
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
@@ -84,14 +84,15 @@ export default function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [detections, setDetections] = useState<DetectionResult[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
-  
-  // REMOVED: pollingRef is no longer needed
 
+  // Keep carousel index in bounds
   useEffect(() => {
     if (detections.length > 0 && activeIdx >= detections.length) {
       setActiveIdx(detections.length - 1);
     }
   }, [detections.length, activeIdx]);
+
+  // ── File Handling ───────────────────────────────────
 
   const handleFiles = useCallback((fileList: FileList) => {
     const newFiles: UploadFile[] = Array.from(fileList).map((file) => ({
@@ -129,11 +130,11 @@ export default function UploadPage() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  // ── New Analysis Handler ──────────────────────────────────
-  // Replaces startPolling with a cleaner async await approach
+  // ── Analysis Logic ───────────────────────────────────
+
   const runAnalysis = useCallback(async (detectionId: string, s3Url: string) => {
     try {
-      // This will now "pause" here until the API confirms the result
+      // Calls the new Gallery-based waiter in api.ts
       const result: FileMetadata = await BirdNestAPI.waitForAnalysis(s3Url);
       
       const endTime = Date.now();
@@ -145,7 +146,7 @@ export default function UploadPage() {
                 ...d,
                 status: "done" as const,
                 tags: result.tags || {},
-                thumbnailUrl: undefined, 
+                thumbnailUrl: result.thumbnail_s3_url, 
                 elapsedMs: endTime - d.startTime,
               }
             : d
@@ -210,7 +211,7 @@ export default function UploadPage() {
               return [...prev, newDetection];
             });
             
-            // Trigger the analysis (run in background, don't await here so loop continues)
+            // Trigger the analysis in the background
             runAnalysis(detId, s3Url);
             
           } else {
@@ -241,6 +242,8 @@ export default function UploadPage() {
 
   const activeDet = detections[activeIdx] ?? null;
 
+  // ── Render ───────────────────────────────────────────
+
   return (
     <PageTransition>
       <Link href="/dashboard">
@@ -260,6 +263,7 @@ export default function UploadPage() {
           </p>
         </div>
 
+        {/* Drop Zone */}
         <motion.div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -303,6 +307,7 @@ export default function UploadPage() {
           </div>
         </motion.div>
 
+        {/* File List */}
         <AnimatePresence>
           {files.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
@@ -357,6 +362,7 @@ export default function UploadPage() {
           )}
         </AnimatePresence>
 
+        {/* Results Area */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-8">
           <div className="mb-4 flex items-center gap-2">
             <h2 className="text-sm font-semibold text-text-primary">Detection Results</h2>
