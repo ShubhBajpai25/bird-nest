@@ -468,9 +468,9 @@ export default function UploadPage() {
                               {activeDet.tags && Object.keys(activeDet.tags).length > 0 ? (
                                 <div className="space-y-2">
                                   {Object.entries(activeDet.tags).map(([species, count]) => (
-                                    <div key={species} className="flex items-center justify-between rounded-lg border border-border bg-bg-deep px-4 py-2.5">
-                                      <div className="flex items-center gap-2.5"><Bird className="h-4 w-4 text-accent-gold" /><span className="text-sm font-semibold capitalize text-text-primary">{species}</span></div>
-                                      <span className="rounded-full bg-accent-emerald/10 px-2.5 py-0.5 text-xs font-bold text-accent-emerald">{count}</span>
+                                    <div key={species} className="flex items-center rounded-lg border border-border bg-bg-deep">
+                                      <div className="flex flex-1 items-center gap-2.5 px-4 py-2.5"><Bird className="h-4 w-4 text-accent-gold" /><span className="text-sm font-semibold capitalize text-text-primary">{species}</span></div>
+                                      <div className="flex items-center gap-1.5 border-l border-border px-4 py-2.5"><span className="text-[10px] font-medium uppercase tracking-wider text-text-tertiary">Count</span><span className="text-sm font-bold text-accent-emerald">{count}</span></div>
                                     </div>
                                   ))}
                                 </div>
