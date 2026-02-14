@@ -454,7 +454,7 @@ export default function UploadPage() {
                             )}
                           </div>
                           <p className="text-sm font-semibold text-text-primary">Analyzing <span className="text-accent-gold">{activeDet.fileName}</span></p>
-                          <p className="mt-1 text-xs text-text-tertiary">AI is identifying bird species...</p>
+                          <p className="mt-1 text-xs text-text-tertiary">Interesting...give me a few seconds!</p>
                           <div className="mt-4 flex items-center gap-1.5 rounded-full bg-accent-gold/10 px-3 py-1.5 text-xs font-medium text-accent-gold"><Clock className="h-3.5 w-3.5" /><LiveTimer startTime={activeDet.startTime} /></div>
                           <DelayNotice startTime={activeDet.startTime} />
                           <p className="mt-4 max-w-sm text-center text-[11px] leading-relaxed text-text-tertiary">Please note that the YOLOv5 model is not completely accurate, hence, predictions can often be wrong. But don&apos;t worry! Head on over to the <Link href="/dashboard/gallery" className="font-medium text-accent-gold hover:underline">gallery</Link> where you can update the tags yourself if they seem wrong!</p>

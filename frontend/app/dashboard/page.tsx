@@ -79,7 +79,7 @@ export default function DashboardPage() {
                 Gallery
               </h2>
               <p className="mb-6 max-w-xs text-sm leading-relaxed text-text-secondary">
-                Look through your recently scanned birds, search for specific ones based on species or number, or scan another photo to find previously sighted birds in your gallery!
+                Look through your recently scanned birds, search for specific ones based on species or number!
               </p>
               <div className="mt-auto flex items-center gap-1.5 text-sm font-medium text-accent-emerald transition-transform group-hover:translate-x-1">
                 Browse gallery
