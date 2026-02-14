@@ -46,7 +46,7 @@ def process_s3_file(bucket_name, object_key):
     MODEL_KEY = os.environ.get('MODEL_KEY', 'models/model.pt')
     CONFIDENCE = float(os.environ.get('CONFIDENCE_THRESHOLD', '0.5'))
 
-    # --- 1. METADATA EXTRACTION ---
+    # --- 1. AGGRESSIVE METADATA EXTRACTION ---
     logger.info(f"🔍 INSPECTING METADATA for {object_key}")
     user_id = 'anonymous-user' 
     
@@ -55,11 +55,23 @@ def process_s3_file(bucket_name, object_key):
         raw_metadata = response.get('Metadata', {})
         logger.info(f"RAW METADATA FROM S3: {json.dumps(raw_metadata)}")
         
-        for key, value in raw_metadata.items():
-            clean_key = key.lower().replace('x-amz-meta-', '')
-            if clean_key == 'userid':
-                user_id = value
+        # Check ALL possible casing variations
+        # S3 can be weird. It might store it as 'userid', 'userId', 'UserID', etc.
+        keys_to_check = ['userid', 'userId', 'UserID', 'x-amz-meta-userid']
+        
+        # A. Direct Lookup (Fast & Precise)
+        for k in keys_to_check:
+            if k in raw_metadata:
+                user_id = raw_metadata[k]
                 break
+        
+        # B. Case-Insensitive Loop (Safety Net if A fails)
+        if user_id == 'anonymous-user':
+            for k, v in raw_metadata.items():
+                if k.lower().replace('x-amz-meta-', '') == 'userid':
+                    user_id = v
+                    break
+                    
         logger.info(f"✅ FINAL RESOLVED USER ID: {user_id}")
             
     except Exception as e:

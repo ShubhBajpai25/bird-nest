@@ -170,18 +170,50 @@ export const BirdNestAPI = {
     return res.json();
   },
 
-  // RESTORED: Original polling logic (1s interval)
-  pollForResults: async (s3Url: string, attempts = 30): Promise<FileMetadata> => {
-    for (let i = 0; i < attempts; i++) {
-      await new Promise((r) => setTimeout(r, 1000));
-      try {
-        const data = await BirdNestAPI.searchByFile(s3Url);
-        if (data && data.tags && Object.keys(data.tags).length > 0) {
-          return data;
-        }
-      } catch { /* ignore */ }
+  // 1. The Core Fetch Function (Single Check)
+  checkAnalysisStatus: async (s3Url: string): Promise<FileMetadata | null> => {
+    try {
+      const res = await fetch(`${API_URL}/search/file`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ s3_url: s3Url }),
+      });
+      
+      if (!res.ok) return null;
+      
+      const data = await res.json();
+      // Only return data if tags are actually present
+      if (data && data.tags && Object.keys(data.tags).length > 0) {
+        return data;
+      }
+      return null; // Pending or empty
+    } catch (err) {
+      return null; // Network glitch, treat as pending
     }
-    throw new Error("Timeout: AI took too long to process.");
+  },
+
+  // 2. The "Await" Wrapper (Replaces Polling in UI)
+  // Usage: const result = await BirdNestAPI.waitForAnalysis(url);
+  waitForAnalysis: async (s3Url: string, timeoutMs = 30000): Promise<FileMetadata> => {
+    const startTime = Date.now();
+    let delay = 500; // Start fast (500ms)
+
+    while (Date.now() - startTime < timeoutMs) {
+      // Check the DB
+      const result = await BirdNestAPI.checkAnalysisStatus(s3Url);
+      
+      if (result) {
+        return result; // ✅ Found it! Return immediately.
+      }
+
+      // ⏳ Wait before checking again
+      await new Promise((r) => setTimeout(r, delay));
+      
+      // Backoff strategy: Increase delay slightly (max 2s) to save bandwidth
+      delay = Math.min(delay * 1.1, 2000); 
+    }
+
+    throw new Error("Analysis timed out. Please check the Gallery later.");
   },
 };
 

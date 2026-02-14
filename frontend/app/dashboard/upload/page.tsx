@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react"; // Removed useRef
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
@@ -84,7 +84,8 @@ export default function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [detections, setDetections] = useState<DetectionResult[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
-  const pollingRef = useRef<Set<string>>(new Set());
+  
+  // REMOVED: pollingRef is no longer needed
 
   useEffect(() => {
     if (detections.length > 0 && activeIdx >= detections.length) {
@@ -128,50 +129,44 @@ export default function UploadPage() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  const startPolling = useCallback(
-    (detectionId: string, s3Url: string) => {
-      if (pollingRef.current.has(detectionId)) return;
-      pollingRef.current.add(detectionId);
-
-      (async () => {
-        try {
-          const result: FileMetadata = await BirdNestAPI.pollForResults(s3Url);
-          const endTime = Date.now();
-          setDetections((prev) =>
-            prev.map((d) =>
-              d.id === detectionId
-                ? {
-                    ...d,
-                    status: "done" as const,
-                    tags: result.tags || {},
-                    thumbnailUrl: undefined, 
-                    elapsedMs: endTime - d.startTime,
-                  }
-                : d
-            )
-          );
-        } catch (err) {
-          const endTime = Date.now();
-          setDetections((prev) =>
-            prev.map((d) =>
-              d.id === detectionId
-                ? {
-                    ...d,
-                    status: "error" as const,
-                    error:
-                      err instanceof Error ? err.message : "Detection failed",
-                    elapsedMs: endTime - d.startTime,
-                  }
-                : d
-            )
-          );
-        } finally {
-          pollingRef.current.delete(detectionId);
-        }
-      })();
-    },
-    []
-  );
+  // ── New Analysis Handler ──────────────────────────────────
+  // Replaces startPolling with a cleaner async await approach
+  const runAnalysis = useCallback(async (detectionId: string, s3Url: string) => {
+    try {
+      // This will now "pause" here until the API confirms the result
+      const result: FileMetadata = await BirdNestAPI.waitForAnalysis(s3Url);
+      
+      const endTime = Date.now();
+      
+      setDetections((prev) =>
+        prev.map((d) =>
+          d.id === detectionId
+            ? {
+                ...d,
+                status: "done" as const,
+                tags: result.tags || {},
+                thumbnailUrl: undefined, 
+                elapsedMs: endTime - d.startTime,
+              }
+            : d
+        )
+      );
+    } catch (err) {
+      const endTime = Date.now();
+      setDetections((prev) =>
+        prev.map((d) =>
+          d.id === detectionId
+            ? {
+                ...d,
+                status: "error" as const,
+                error: err instanceof Error ? err.message : "Detection failed",
+                elapsedMs: endTime - d.startTime,
+              }
+            : d
+        )
+      );
+    }
+  }, []);
 
   const uploadAll = async () => {
     const pending = files.filter((f) => f.status === "pending");
@@ -215,7 +210,8 @@ export default function UploadPage() {
               return [...prev, newDetection];
             });
             
-            startPolling(detId, s3Url);
+            // Trigger the analysis (run in background, don't await here so loop continues)
+            runAnalysis(detId, s3Url);
             
           } else {
             setFiles((prev) =>
