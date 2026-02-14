@@ -477,18 +477,18 @@ export default function UploadPage() {
                               ) : (
                                 <p className="text-sm text-text-tertiary">No species detected.</p>
                               )}
+                              {(activeDet.funFactLoading || activeDet.funFact) && (
+                                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="mt-3 rounded-xl border border-accent-gold/20 bg-accent-gold/5 p-3">
+                                  <div className="mb-1.5 flex items-center gap-2"><Lightbulb className="h-3.5 w-3.5 text-accent-gold" /><span className="text-[10px] font-semibold uppercase tracking-wider text-accent-gold">Fun Fact</span></div>
+                                  {activeDet.funFactLoading ? (
+                                    <div className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin text-accent-gold/60" /><span className="text-xs text-text-tertiary">Generating a fun fact...</span></div>
+                                  ) : (
+                                    <p className="text-xs leading-relaxed text-text-secondary">{activeDet.funFact}</p>
+                                  )}
+                                </motion.div>
+                              )}
                             </div>
                           </div>
-                          {(activeDet.funFactLoading || activeDet.funFact) && (
-                            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="mt-4 rounded-xl border border-accent-gold/20 bg-accent-gold/5 p-4">
-                              <div className="mb-2 flex items-center gap-2"><Lightbulb className="h-4 w-4 text-accent-gold" /><span className="text-xs font-semibold uppercase tracking-wider text-accent-gold">Fun Fact</span></div>
-                              {activeDet.funFactLoading ? (
-                                <div className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin text-accent-gold/60" /><span className="text-xs text-text-tertiary">Generating a fun fact...</span></div>
-                              ) : (
-                                <p className="text-sm leading-relaxed text-text-secondary">{activeDet.funFact}</p>
-                              )}
-                            </motion.div>
-                          )}
                           <div className="mt-4 flex items-center justify-end gap-1.5 border-t border-border pt-3 text-[11px] text-text-tertiary"><Clock className="h-3 w-3" />Processed in {formatTime(activeDet.elapsedMs)}</div>
                         </div>
                       )}
